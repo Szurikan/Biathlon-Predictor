@@ -1,41 +1,30 @@
-# main.py
-
-import pandas as pd
-from operations.data.loader import load_data, clean_team_events, extract_identity_columns
 from operations.data.preprocessing import (
-    categorize_columns,
-    fill_missing_values,
-    convert_percentage_columns
+    load_and_clean_columns,
+    remove_empty_rows,
+    fill_group_means,
+    fill_result_columns,
+    final_cleaning_and_encoding,
+    save_cleaned_data
 )
 
 def main():
-    # 1. Įkeliame duomenis
-    df = load_data()
+    input_path = "data/female_athletes_2425_full_stats_with_ranks.csv"
+    output_path = "data/female_athletes_cleaned_final.csv"
 
-    # 2. Šaliname komandines varžybas ir visiškai tuščius stulpelius
-    df = clean_team_events(df)
+    column_groups = [
+        ['StatShooting_24_25', 'StatShooting_23_24', 'StatShooting_22_23', 'StatShooting_21_22'],
+        ['Prone_24_25', 'Prone_23_24', 'Prone_22_23', 'Prone_21_22'],
+        ['Standing_24_25', 'Standing_23_24', 'Standing_22_23', 'Standing_21_22'],
+        ['Skiing_24_25', 'Skiing_23_24', 'Skiing_22_23', 'Skiing_21_22'],
+        ['SkiKMB_24_25', 'SkiKMB_23_24', 'SkiKMB_22_23', 'SkiKMB_21_22']
+    ]
 
-    # 3. Ištraukiame identifikacinius stulpelius
-    df, id_df = extract_identity_columns(df)
-
-    # 4. Konvertuojame procentus į skaitines reikšmes
-    df = convert_percentage_columns(df)
-
-    # 5. Užpildome trūkstamas reikšmes
-    df = fill_missing_values(df)
-
-    # 6. Šaliname visiškai tuščias eilutes
-    df.dropna(how='all', inplace=True)
-
-    # 7. Suskirstome stulpelius (jei reikia tolesniam naudojimui)
-    categorize_columns(df)
-
-    # 8. Sujungiame su ID informacija
-    df_final = pd.concat([id_df.reset_index(drop=True), df.reset_index(drop=True)], axis=1)
-
-    # 9. Išsaugome į CSV
-    df_final.to_csv("cleaned_data.csv", index=False)
-    print("[OK] Duomenys išsaugoti į 'cleaned_data.csv'")
+    df = load_and_clean_columns(input_path)
+    df = remove_empty_rows(df, column_groups)
+    df = fill_group_means(df, column_groups)
+    df = fill_result_columns(df, last_group_col='SkiKMB_21_22')
+    df = final_cleaning_and_encoding(df)
+    save_cleaned_data(df, output_path)
 
 if __name__ == "__main__":
     main()
