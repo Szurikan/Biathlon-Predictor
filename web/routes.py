@@ -62,3 +62,4 @@ def predict():
                           results=predictions, 
                           event=f"Būsimas {race_type} etapas", 
                           is_past=False)
+
