@@ -175,3 +175,5 @@ cython_debug/
 
 data/female_athletes_2425_full_stats_with_ranks.csv
 data/raw/female_athletes_2425_full_stats_with_ranks.csv
+data/female_athletes_cleaned_final.csv
+cleaned_data.csv
