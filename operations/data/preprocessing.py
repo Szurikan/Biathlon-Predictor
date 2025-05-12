@@ -48,9 +48,7 @@ def fill_result_columns(df, last_group_col):
                 .str.replace(',', '.', regex=False)
                 .str.strip()
             )
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            max_rank = df[col].max(skipna=True)
-            df[col] = df[col].fillna(max_rank + 1)
+            df[col] = pd.to_numeric(df[col], errors='coerce')  # Neužpildome NaN!
     return df
 
 def final_cleaning_and_encoding(df):
@@ -62,3 +60,11 @@ def final_cleaning_and_encoding(df):
 def save_cleaned_data(df, output_path):
     df.to_csv(output_path, index=False)
     print(f"Galutinai išvalytas failas išsaugotas kaip: {output_path}")
+
+def encode_competition_participation(input_path, output_path):
+    df = pd.read_csv(input_path)
+    competition_columns = [col for col in df.columns if col.startswith("202")]
+    df_binary = df.copy()
+    df_binary[competition_columns] = df_binary[competition_columns].notna().astype(int)
+    df_binary.to_csv(output_path, index=False)
+    print(f"Failas su užkoduotais varžybų duomenimis išsaugotas kaip: {output_path}")
