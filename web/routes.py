@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
-from web.web_actions import get_past_events
+from web.web_actions import get_past_events, predict_next_event
 from operations.data.loader import load_data
 import os
 
@@ -51,3 +51,14 @@ def show_results():
     except Exception as e:
         flash(f"Klaida rodant rezultatus: {str(e)}", "error")
         return redirect(url_for('web.index'))
+    
+@web_bp.route('/predict', methods=['POST'])
+def predict():
+    """Prognozuoja būsimo etapo rezultatus."""
+    race_type = request.form.get('race_type')
+    predictions = predict_next_event(race_type)
+    
+    return render_template('result.html', 
+                          results=predictions, 
+                          event=f"Būsimas {race_type} etapas", 
+                          is_past=False)
