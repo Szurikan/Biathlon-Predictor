@@ -1,5 +1,5 @@
 import os
-from operations.loader import load_data
+from operations.data.loader import load_data
 
 DATA_FILE = os.path.join('data', 'female_athletes_2425_full_stats_with_ranks.csv')
 
