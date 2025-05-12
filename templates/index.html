@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <title>Biatlono Prognozė</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Biatlono rezultatų prognozė</h1>
+
+    <!-- Flash pranešimai -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Blokas 1: Įvykusių rezultatų peržiūra -->
+    <h2>1. Įvykusių etapų rezultatai</h2>
+    <form method="post" action="/show_results">
+        <label for="event">Pasirinkite įvykusį etapą:</label><br>
+        <select name="event" required>
+            {% for event in past_events %}
+                <option value="{{ event }}">{{ event }}</option>
+            {% endfor %}
+        </select><br><br>
+        <input type="submit" value="Rodyti rezultatus">
+    </form>
+
+    <hr>
+
+    <!-- Blokas 2: Būsimo etapo prognozė -->
+    <h2>2. Būsimo etapo prognozė</h2>
+    <form method="post" action="/predict">
+        <label for="race_type">Pasirinkite rungties tipą:</label><br>
+        <select name="race_type" required>
+            <option value="Sprint">Sprint</option>
+            <option value="Pursuit">Pursuit</option>
+            <option value="Mass Start">Mass Start</option>
+            <option value="Individual">Individual</option>
+        </select><br><br>
+        <input type="submit" value="Prognozuoti">
+    </form>
+
+    <hr>
+
+    <!-- Atnaujinti duomenis mygtukas -->
+    <form action="/update" method="get">
+        <button type="submit">Atnaujinti duomenis</button>
+    </form>
+</body>
+</html>

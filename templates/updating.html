@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <title>Atnaujinama</title>
+</head>
+<body>
+    <h2>Palaukite, duomenys naujinami...</h2>
+    <p>Šis procesas gali užtrukti kelias minutes.</p>
+
+    <script>
+        function checkStatus() {
+            fetch('/status')
+                .then(response => response.text())
+                .then(data => {
+                    if (data.trim() === "done") {
+                        window.location.href = "/";
+                    } else {
+                        setTimeout(checkStatus, 5000); // Tikrina kas 5 sek.
+                    }
+                })
+                .catch(err => {
+                    console.error("Klaida tikrinant statusą:", err);
+                    setTimeout(checkStatus, 5000);
+                });
+        }
+        checkStatus();
+    </script>
+</body>
+</html>
