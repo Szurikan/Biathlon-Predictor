@@ -180,3 +180,5 @@ cleaned_data.csv
 results/future_predictions.csv
 results/validation_results.csv
 data/female_athletes_binary_competitions.csv
+*.csv
+*.pkl

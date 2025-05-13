@@ -14,43 +14,24 @@ def predict_participation_xgb(data_path, target_column, output_dir="data/"):
     df.columns = [col.strip() for col in df.columns]
     target_column = target_column.strip()
 
-    # Rikiuojame varžybų stulpelius pagal datą (tik tie, kurie prasideda data)
+    # Rikiuojame varžybų stulpelius pagal datą
     competition_columns = [col for col in df.columns if re.match(r"^\d{4}-\d{2}-\d{2}", col)]
     competition_columns_sorted = sorted(
         competition_columns, key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d")
     )
 
-    # Užtikriname, kad target_column tikrai egzistuoja
     if target_column not in competition_columns_sorted:
         raise ValueError(f"Nurodytas stulpelis '{target_column}' nerastas tarp varžybų stulpelių.")
 
     target_index = competition_columns_sorted.index(target_column)
     past_columns = competition_columns_sorted[:target_index]
+    static_features = [col for col in df.columns if not re.match(r"^\d{4}-\d{2}-\d{2}", col) and col not in ["IBUId", "FullName"]]
 
-    # Požymiai, kurie nėra varžybų stulpeliai
-    static_features = [
-        col for col in df.columns
-        if not re.match(r"^\d{4}-\d{2}-\d{2}", col)
-        and col not in ["IBUId", "FullName", target_column]
-    ]
-
-    # Visi naudojami požymiai
-    feature_names = static_features + past_columns
-
-    # Patikriname, kad target_column nepatektų tarp požymių
-    assert target_column not in feature_names, "KLAIDA: target_column pateko į požymius!"
-
-    # Mokome modelį su žinomomis reikšmėmis
-    df_model = df.copy()
-    if df_model[target_column].isnull().any():
-        raise ValueError(f"Trūksta reikšmių target_column stulpelyje: {target_column}")
-
-    X = df_model[feature_names].fillna(0)
+    df_model = df.dropna(subset=[target_column])
+    X = df_model[static_features + past_columns].fillna(0)
     y = df_model[target_column].astype(int)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     model = XGBClassifier(
         n_estimators=100,
@@ -64,16 +45,13 @@ def predict_participation_xgb(data_path, target_column, output_dir="data/"):
     )
     model.fit(X_train, y_train)
 
-    # Išsaugome modelį kartu su naudotais požymiais
     os.makedirs(output_dir, exist_ok=True)
-    model_path = os.path.join(
-        output_dir,
-        f"model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
-    )
-    joblib.dump((model, feature_names), model_path)
+    model_path = os.path.join(output_dir, f"xgb_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
+    joblib.dump(model, model_path)
     print(f"Modelis išsaugotas: {model_path}")
 
-    # Įvertiname modelį
+
+
     y_pred = model.predict(X_test)
     report = classification_report(y_test, y_pred, output_dict=False)
     print(f"\nModelio rezultatai prognozuojant '{target_column}':\n")
@@ -81,30 +59,21 @@ def predict_participation_xgb(data_path, target_column, output_dir="data/"):
 
     # Prognozuojame visoms sportininkėms
     df_all = df.copy()
-    df_all_features = df_all[feature_names].fillna(0)
-
-    # Patikriname dar kartą
-    assert target_column not in df_all_features.columns, "KLAIDA: target_column pateko į prognozės požymius!"
-
+    df_all_features = df_all[static_features + past_columns].fillna(0)
     df_all["PredictedParticipation"] = model.predict(df_all_features)
 
-    # Išsaugome prognozes
-    output_csv = os.path.join(
-        output_dir,
-        f"predictions_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.csv"
-    )
+    print("Naudojami požymiai prognozei:", df_all_features.columns.tolist())
+    assert target_column not in df_all_features.columns
+
+    output_csv = os.path.join(output_dir, f"xgb_predictions_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.csv")
     df_all[["FullName", "PredictedParticipation"]].to_csv(output_csv, index=False)
     print(f"\nPrognozių failas sukurtas: {output_csv}")
 
-    # Išvedame tik tas sportininkes, kurioms prognozuotas dalyvavimas
+    # Išvedame sportininkes, kurioms prognozuojamas dalyvavimas
     predicted_names = df_all[df_all["PredictedParticipation"] == 1]["FullName"]
-    print("\nSportininkės, kurioms prognozuojamas DALYVAVIMAS šiame etape:")
+    print("\nSportininkės, kurioms prognozuojamas dalyvavimas šiame etape:")
     for name in predicted_names:
         print("-", name)
 
 # Naudojimas:
-if __name__ == "__main__":
-    predict_participation_xgb(
-        data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2024-12-03 01 (15  Short Individual) M"
-    )
+predict_participation_xgb("data/female_athletes_binary_competitions.csv", "2025-01-16 05 (15  Individual Competition) W")

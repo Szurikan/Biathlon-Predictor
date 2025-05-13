@@ -19,7 +19,7 @@ def update_data(output_path=None):
     if output_path is None:
         # Nustatome numatytąjį išsaugojimo kelią projekto struktūroje
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        output_path = os.path.join(base_dir, "data", "raw", "female_athletes_2425_full_stats_with_ranks.csv")
+        output_path = os.path.join(base_dir, "data", "female_athletes_2425_full_stats_with_ranks.csv")
     
     print(f"[1] Pradedami rinkti duomenys iš IBU API...")
     
@@ -78,7 +78,8 @@ def update_data(output_path=None):
                 year = race_date.year
 
                 # Formatuojame pavadinimą: "2025 03 (Sprint) W"
-                formatted_name = f"{year} {stage_num:02d} ({discipline}) {gender_suffix}"
+                date_prefix = race_date.strftime("%Y-%m-%d")
+                formatted_name = f"{date_prefix} {stage_num:02d} ({discipline}) {gender_suffix}"
 
                 race_columns.append((race_id, formatted_name))
                 race_ids.append(race_id)
