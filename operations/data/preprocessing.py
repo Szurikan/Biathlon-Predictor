@@ -1,110 +1,70 @@
 import pandas as pd
-from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
-import os
-import joblib
-import re
-from datetime import datetime
 
-def predict_participation_xgb(data_path, target_column, output_dir="data/"):
-    df = pd.read_csv(data_path)
+def load_and_clean_columns(input_path):
+    df = pd.read_csv(input_path)
 
-    # Normalizuojame stulpelių pavadinimus
-    df.columns = [col.strip() for col in df.columns]
-    target_column = target_column.strip()
+    # Pašalinti stulpelius, kurių pavadinimai baigiasi " M"
+    columns_to_drop = [col for col in df.columns if col.strip().endswith("M")]
+    df = df.drop(columns=columns_to_drop)
 
-    # Rikiuojame varžybų stulpelius pagal datą (tik tie, kurie prasideda data)
-    competition_columns = [col for col in df.columns if re.match(r"^\d{4}-\d{2}-\d{2}", col)]
-    competition_columns_sorted = sorted(
-        competition_columns, key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d")
-    )
+    # Pašalinti stulpelius, kuriuose visos reikšmės yra NaN arba tuščios eilutės
+    df = df.dropna(axis=1, how='all')
+    df = df.loc[:, ~(df == '').all()]
+    return df
 
-    # Užtikriname, kad target_column tikrai egzistuoja
-    if target_column not in competition_columns_sorted:
-        raise ValueError(f"Nurodytas stulpelis '{target_column}' nerastas tarp varžybų stulpelių.")
+def remove_empty_rows(df, column_groups):
+    flattened_ET = sum(column_groups[:3], [])
+    columns_ET = [col for col in flattened_ET if col in df.columns]
+    df = df[~df[columns_ET].replace('', pd.NA).isna().all(axis=1)].copy()
+    return df
 
-    target_index = competition_columns_sorted.index(target_column)
-    past_columns = competition_columns_sorted[:target_index]
+def fill_group_means(df, column_groups):
+    for group in column_groups:
+        group_cols = [col for col in group if col in df.columns]
+        if not group_cols:
+            continue
 
-    # Požymiai, kurie nėra varžybų stulpeliai
-    static_features = [
-        col for col in df.columns
-        if not re.match(r"^\d{4}-\d{2}-\d{2}", col)
-        and col not in ["IBUId", "FullName", target_column]
-    ]
+        for col in group_cols:
+            df[col] = (
+                df[col].astype(str)
+                .str.replace('%', '', regex=False)
+                .str.replace(',', '.', regex=False)
+                .str.strip()
+            )
+            df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # Visi naudojami požymiai
-    feature_names = static_features + past_columns
+        row_mean = df[group_cols].mean(axis=1)
+        for col in group_cols:
+            df[col] = df[col].fillna(row_mean)
+    return df
 
-    # Patikriname, kad target_column nepatektų tarp požymių
-    assert target_column not in feature_names, "KLAIDA: target_column pateko į požymius!"
+def fill_result_columns(df, last_group_col):
+    if last_group_col in df.columns:
+        result_columns = df.columns[df.columns.get_loc(last_group_col) + 1:]
+        for col in result_columns:
+            df[col] = (
+                df[col].astype(str)
+                .str.replace('%', '', regex=False)
+                .str.replace(',', '.', regex=False)
+                .str.strip()
+            )
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            df[col] = df[col].fillna(999)  # Nedalyvavo
+    return df
 
-    # Mokome modelį su žinomomis reikšmėmis
-    df_model = df.copy()
-    if df_model[target_column].isnull().any():
-        raise ValueError(f"Trūksta reikšmių target_column stulpelyje: {target_column}")
+def final_cleaning_and_encoding(df):
+    df["FullName"] = df["FullName"].fillna("missing")
+    df["Nation"] = df["Nation"].fillna("missing")
+    df = pd.get_dummies(df, columns=["Nation"], prefix="Nation")
+    return df
 
-    X = df_model[feature_names].fillna(0)
-    y = df_model[target_column].astype(int)
+def save_cleaned_data(df, output_path):
+    df.to_csv(output_path, index=False)
+    print(f"Galutinai išvalytas failas išsaugotas kaip: {output_path}")
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    model = XGBClassifier(
-        n_estimators=100,
-        max_depth=5,
-        learning_rate=0.1,
-        objective='binary:logistic',
-        scale_pos_weight=(y_train == 0).sum() / max((y_train == 1).sum(), 1),
-        use_label_encoder=False,
-        eval_metric='logloss',
-        random_state=42
-    )
-    model.fit(X_train, y_train)
-
-    # Išsaugome modelį kartu su naudotais požymiais
-    os.makedirs(output_dir, exist_ok=True)
-    model_path = os.path.join(
-        output_dir,
-        f"model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
-    )
-    joblib.dump((model, feature_names), model_path)
-    print(f"Modelis išsaugotas: {model_path}")
-
-    # Įvertiname modelį
-    y_pred = model.predict(X_test)
-    report = classification_report(y_test, y_pred, output_dict=False)
-    print(f"\nModelio rezultatai prognozuojant '{target_column}':\n")
-    print(report)
-
-    # Prognozuojame visoms sportininkėms
-    df_all = df.copy()
-    df_all_features = df_all[feature_names].fillna(0)
-
-    # Patikriname dar kartą
-    assert target_column not in df_all_features.columns, "KLAIDA: target_column pateko į prognozės požymius!"
-
-    df_all["PredictedParticipation"] = model.predict(df_all_features)
-
-    # Išsaugome prognozes
-    output_csv = os.path.join(
-        output_dir,
-        f"predictions_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.csv"
-    )
-    df_all[["FullName", "PredictedParticipation"]].to_csv(output_csv, index=False)
-    print(f"\nPrognozių failas sukurtas: {output_csv}")
-
-    # Išvedame tik tas sportininkes, kurioms prognozuotas dalyvavimas
-    predicted_names = df_all[df_all["PredictedParticipation"] == 1]["FullName"]
-    print("\nSportininkės, kurioms prognozuojamas DALYVAVIMAS šiame etape:")
-    for name in predicted_names:
-        print("-", name)
-
-# Naudojimas:
-if __name__ == "__main__":
-    predict_participation_xgb(
-        data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2024-12-03 01 (15  Short Individual) M"
-    )
+def encode_competition_participation(df, binary_output_path):
+    competition_columns = [col for col in df.columns if col.startswith("202")]
+    df_binary = df.copy()
+    df_binary[competition_columns] = df_binary[competition_columns].notna().astype(int)
+    df_binary.to_csv(binary_output_path, index=False)
+    print(f"Failas su užkoduotais varžybų duomenimis išsaugotas kaip: {binary_output_path}")

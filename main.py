@@ -24,10 +24,12 @@ def main():
     df = load_and_clean_columns(input_path)
     df = remove_empty_rows(df, column_groups)
     df = fill_group_means(df, column_groups)
-    df = fill_result_columns(df, last_group_col='SkiKMB_21_22')
     df = final_cleaning_and_encoding(df)
+    encode_competition_participation(df, binary_output)
+    df = fill_result_columns(df, last_group_col='SkiKMB_21_22')
     save_cleaned_data(df, output_path)
-    encode_competition_participation(output_path, binary_output)
+   
+    
 
 
 if __name__ == "__main__":
