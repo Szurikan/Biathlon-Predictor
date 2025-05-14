@@ -130,12 +130,15 @@ def predict_place_with_participation(
     plt.tight_layout()
     plt.show()
 
-    # 9. Koreliacijų heatmap
-    numeric_df = df_train[past_columns].fillna(0)
-    corr = numeric_df.corr()
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(corr, cmap='coolwarm', center=0, annot=False)
-    plt.title("Varžybų rezultatų koreliacijos matrica")
+    # 9. Paklaidų (error) histograma
+    errors = y_pred - y_test
+    plt.figure(figsize=(8, 6))
+    plt.hist(errors, bins=30, edgecolor='black', alpha=0.7)
+    plt.axvline(0, color='red', linestyle='--', linewidth=2)
+    plt.xlabel("Paklaida (prognozė - tikroji reikšmė)")
+    plt.ylabel("Stebėjimų skaičius")
+    plt.title("Modelio paklaidų histograma")
+    plt.grid(True)
     plt.tight_layout()
     plt.show()
 

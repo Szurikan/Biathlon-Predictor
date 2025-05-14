@@ -8,6 +8,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 def predict_participation(data_path, target_column, output_dir="data/"):
     df = pd.read_csv(data_path)
@@ -105,14 +106,29 @@ def predict_participation(data_path, target_column, output_dir="data/"):
     plt.tight_layout()
     plt.show()
 
-    # Koreliacijos matrica
-    numeric_df = df_model[past_columns].fillna(0)
-    corr = numeric_df.corr()
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(corr, cmap='coolwarm', center=0, annot=False)
-    plt.title("Varžybų rezultatų koreliacijos matrica")
+
+    thresholds = np.linspace(0, 1, 101)
+    precisions, recalls, f1s = [], [], []
+    y_proba = model.predict_proba(X_test)[:, 1]
+
+    for t in thresholds:
+        preds = (y_proba >= t).astype(int)
+        precisions.append(precision_score(y_test, preds, zero_division=0))
+        recalls.append(recall_score(y_test, preds, zero_division=0))
+        f1s.append(f1_score(y_test, preds, zero_division=0))
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(thresholds, precisions, label='Precision')
+    plt.plot(thresholds, recalls, label='Recall')
+    plt.plot(thresholds, f1s, label='F1-score')
+    plt.xlabel('Slenkstis (threshold)')
+    plt.ylabel('Reikšmė')
+    plt.title('Rodiklių priklausomybė nuo klasifikavimo slenksčio')
+    plt.legend()
+    plt.grid(True)
     plt.tight_layout()
     plt.show()
+
 
 if __name__ == "__main__":
     predict_participation(
