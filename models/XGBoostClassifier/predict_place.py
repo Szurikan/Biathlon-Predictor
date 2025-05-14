@@ -1,76 +1,12 @@
 import pandas as pd
-from xgboost import XGBRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
-import joblib
+import numpy as np
 import os
+import joblib
 from datetime import datetime
 import matplotlib.pyplot as plt
-
-# def predict_place_with_participation_xgb(
-#     cleaned_data_path,
-#     binary_data_path,
-#     target_column,
-#     output_dir="models/XGBoost"
-# ):
-#     import pandas as pd
-#     from xgboost import XGBRegressor
-#     import joblib, os
-#     from datetime import datetime
-#     import matplotlib.pyplot as plt
-
-#     df_cleaned = pd.read_csv(cleaned_data_path)
-#     df_binary = pd.read_csv(binary_data_path)
-
-#     # Surikiuojame datas
-#     competition_columns = [col for col in df_binary.columns if col.startswith("202")]
-#     competition_columns_sorted = sorted(competition_columns, key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d"))
-#     target_index = competition_columns_sorted.index(target_column)
-#     past_columns = competition_columns_sorted[:target_index]
-
-#     static_features = [col for col in df_cleaned.columns if not col.startswith("202") and col not in ["IBUId", "FullName", target_column]]
-#     feature_names = static_features + past_columns
-
-#     # Įkeliame dalyvavimo modelį
-#     model_name = f"xgb_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
-#     model_path = os.path.join("data", model_name)
-#     loaded = joblib.load(model_path)
-#     clf, clf_feature_names = loaded if isinstance(loaded, tuple) else (loaded, feature_names)
-
-#     # Prognozuojame dalyvavimą
-#     df_cleaned["PredictedParticipation"] = clf.predict(df_binary[clf_feature_names].fillna(0))
-
-#     # Mokymosi duomenys – naudoti tik tuos, kurie turi bent vieną žinomą praeities vietą
-#     df_train = df_cleaned[df_cleaned[past_columns].notna().sum(axis=1) > 0].copy()
-#     df_train["AvgPastPlace"] = df_train[past_columns].mean(axis=1)
-
-#     X_train = df_train[feature_names].fillna(0)
-#     y_train = df_train["AvgPastPlace"]
-
-#     model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, objective='reg:squarederror', random_state=42)
-#     model.fit(X_train, y_train)
-
-#     # Prognozuojame dalyvaujančioms
-#     df_predict = df_cleaned[df_cleaned["PredictedParticipation"] == 1].copy()
-#     X_predict = df_predict[feature_names].fillna(0)
-#     y_pred = model.predict(X_predict)
-
-#     df_predict["PredictedPlace"] = y_pred
-#     df_predict["ActualPlace"] = df_predict[target_column].apply(lambda x: int(x) if pd.notna(x) else "Nedalyvavo")
-#     df_predict_sorted = df_predict[["FullName", "PredictedPlace", "ActualPlace"]].sort_values("PredictedPlace").reset_index(drop=True)
-#     df_predict_sorted.insert(0, "PredictedRank", df_predict_sorted.index + 1)
-
-#     print(f"\nPrognozės (vidutinė praeities vieta): {len(df_predict_sorted)} sportininkės")
-#     print(df_predict_sorted.to_string(index=False))
-
-#     os.makedirs(output_dir, exist_ok=True)
-#     model_file = os.path.join(output_dir, f"xgb_regression_avg_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
-#     joblib.dump((model, feature_names), model_file)
-
-#     csv_path = os.path.join(output_dir, f"xgb_predicted_places_avg_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.csv")
-#     df_predict_sorted.to_csv(csv_path, index=False)
-
-#     print(f"\n📦 Modelis išsaugotas: {model_file}")
-#     print(f"📄 Prognozės išsaugotos: {csv_path}")
+from xgboost import XGBRegressor
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 def predict_place_with_participation_xgb(
     cleaned_data_path,
@@ -78,67 +14,128 @@ def predict_place_with_participation_xgb(
     target_column,
     output_dir="models/XGBoost"
 ):
-    import pandas as pd
-    from xgboost import XGBRegressor
-    import joblib, os
-    from datetime import datetime
-    import matplotlib.pyplot as plt
-
+    # 1. Įkeliame duomenis
     df_cleaned = pd.read_csv(cleaned_data_path)
     df_binary = pd.read_csv(binary_data_path)
 
+    # 2. Nustatome požymius
     competition_columns = [col for col in df_binary.columns if col.startswith("202")]
-    competition_columns_sorted = sorted(competition_columns, key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d"))
+    competition_columns_sorted = sorted(
+        competition_columns,
+        key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d")
+    )
     target_index = competition_columns_sorted.index(target_column)
     past_columns = competition_columns_sorted[:target_index]
 
-    static_features = [col for col in df_cleaned.columns if not col.startswith("202") and col not in ["IBUId", "FullName", target_column]]
+    static_features = [
+        col for col in df_cleaned.columns
+        if not col.startswith("202") and col not in ["IBUId", "FullName"]
+    ]
     feature_names = static_features + past_columns
 
+    # 3. Įkeliame dalyvavimo modelį
     model_name = f"xgb_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
     model_path = os.path.join("data", model_name)
     loaded = joblib.load(model_path)
     clf, clf_feature_names = loaded if isinstance(loaded, tuple) else (loaded, feature_names)
 
-    df_cleaned["PredictedParticipation"] = clf.predict(df_binary[clf_feature_names].fillna(0))
+    df_binary_features = df_binary[clf_feature_names].fillna(0)
+    df_cleaned["PredictedParticipation"] = clf.predict(df_binary_features)
 
-    # Naudojame paskutinę žinomą vietą
-    df_train = df_cleaned[df_cleaned[past_columns].notna().sum(axis=1) > 0].copy()
-    df_train["LastKnownPlace"] = df_train[past_columns].T.ffill().iloc[-1]
+    # 4. Mokymo duomenys (tik su žinoma vieta)
+    df_train = df_cleaned[df_cleaned[target_column].notna()].copy()
+    X = df_train[feature_names].fillna(0)
+    y = df_train[target_column].astype(float)
 
-    X_train = df_train[feature_names].fillna(0)
-    y_train = df_train["LastKnownPlace"]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
-    model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, objective='reg:squarederror', random_state=42)
-    model.fit(X_train, y_train)
+    # 5. GridSearch
+    param_grid = {
+        'n_estimators': [50, 100, 150],
+        'max_depth': [3, 5, 7],
+        'learning_rate': [0.01, 0.1, 0.2]
+    }
+    grid_search = GridSearchCV(
+        XGBRegressor(objective='reg:squarederror', random_state=42),
+        param_grid,
+        scoring='neg_mean_absolute_error',
+        cv=5,
+        n_jobs=-1,
+        verbose=1
+    )
 
-    df_predict = df_cleaned[df_cleaned["PredictedParticipation"] == 1].copy()
-    X_predict = df_predict[feature_names].fillna(0)
-    y_pred = model.predict(X_predict)
+    print("\n🔍 Vykdoma GridSearchCV optimizacija...")
+    grid_search.fit(X_train, y_train)
+    model = grid_search.best_estimator_
+    print(f"\n✅ Geriausias modelis: {grid_search.best_params_}")
 
-    df_predict["PredictedPlace"] = y_pred
-    df_predict["ActualPlace"] = df_predict[target_column].apply(lambda x: int(x) if pd.notna(x) else "Nedalyvavo")
-    df_predict_sorted = df_predict[["FullName", "PredictedPlace", "ActualPlace"]].sort_values("PredictedPlace").reset_index(drop=True)
-    df_predict_sorted.insert(0, "PredictedRank", df_predict_sorted.index + 1)
+    # 6. Modelio įvertinimas
+    y_pred = model.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    r2 = r2_score(y_test, y_pred)
 
-    print(f"\nPrognozės (paskutinė žinoma vieta): {len(df_predict_sorted)} sportininkės")
-    print(df_predict_sorted.to_string(index=False))
+    print("\n📊 Modelio rezultatai:")
+    print(f"MAE: {mae:.2f}")
+    print(f"RMSE: {rmse:.2f}")
+    print(f"R2: {r2:.2f}")
 
+    # 7. Požymių svarbos grafikas
+    importances = model.feature_importances_
+    feature_importance = pd.DataFrame({
+        "Feature": feature_names,
+        "Importance": importances
+    }).sort_values(by="Importance", ascending=False)
+
+    top_features = feature_importance.head(10)
+    plt.figure(figsize=(10, 6))
+    plt.barh(top_features["Feature"], top_features["Importance"], edgecolor='black')
+    plt.gca().invert_yaxis()
+    plt.xlabel("Svarba (feature importance)")
+    plt.title("Top 10 požymių (XGBoost)")
+    plt.tight_layout()
+    plt.show()
+
+    # 8. GridSearch rezultatai
+    results = pd.DataFrame(grid_search.cv_results_)
+    plt.figure(figsize=(10, 6))
+    for depth in sorted(results["param_max_depth"].unique()):
+        subset = results[results["param_max_depth"] == depth]
+        mean_scores = subset.groupby("param_n_estimators")["mean_test_score"].mean()
+        plt.plot(mean_scores.index, -mean_scores.values, marker='o', label=f"max_depth={depth}")
+    plt.title("MAE priklausomybė nuo n_estimators")
+    plt.xlabel("n_estimators")
+    plt.ylabel("Vidutinis MAE")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # 9. Paklaidų histograma
+    errors = y_pred - y_test
+    plt.figure(figsize=(8, 6))
+    plt.hist(errors, bins=30, edgecolor='black', alpha=0.7)
+    plt.axvline(0, color='red', linestyle='--', linewidth=2)
+    plt.xlabel("Paklaida (prognozė - tikroji vieta)")
+    plt.ylabel("Stebėjimų skaičius")
+    plt.title("Modelio paklaidų histograma (XGBoost)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # 10. Modelio išsaugojimas
     os.makedirs(output_dir, exist_ok=True)
-    model_file = os.path.join(output_dir, f"xgb_regression_last_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
-    joblib.dump((model, feature_names), model_file)
-
-    csv_path = os.path.join(output_dir, f"xgb_predicted_places_last_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.csv")
-    df_predict_sorted.to_csv(csv_path, index=False)
-
-    print(f"\n📦 Modelis išsaugotas: {model_file}")
-    print(f"📄 Prognozės išsaugotos: {csv_path}")
+    model_filename = f"xgb_regression_place_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
+    model_path = os.path.join(output_dir, model_filename)
+    joblib.dump((model, feature_names), model_path)
+    print(f"\n📦 Modelis išsaugotas: {model_path}")
 
 if __name__ == "__main__":
     predict_place_with_participation_xgb(
         cleaned_data_path="data/female_athletes_cleaned_final.csv",
         binary_data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2025-01-23 06 (7.5  Sprint Competition) W",
+        target_column="2025-03-13 09 (12.5  Short Individual) W",
         output_dir="data/"
     )
-
