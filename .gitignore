@@ -182,3 +182,7 @@ results/validation_results.csv
 data/female_athletes_binary_competitions.csv
 *.csv
 *.pkl
+data/Mano Duomenys/~$apu rezultatai.docx
+data/Mano Duomenys/Etapu rezultatai.docx
+data/Mano Duomenys/Etapu rezultatai.docx
+*.docx

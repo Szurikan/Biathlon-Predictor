@@ -63,6 +63,26 @@ def predict_place_with_participation(
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
+        # Požymių svarbos diagrama
+    import matplotlib.pyplot as plt
+
+    importances = model.feature_importances_
+    feature_importance = pd.DataFrame({
+        "Feature": feature_names,
+        "Importance": importances
+    })
+
+    # Surikiuojame ir pasirenkame TOP 10
+    top_features = feature_importance.sort_values(by="Importance", ascending=False).head(10)
+
+    # Diagramos braižymas
+    plt.figure(figsize=(10, 6))
+    plt.barh(top_features["Feature"][::-1], top_features["Importance"][::-1], edgecolor='black')
+    plt.xlabel("Svarba (feature importance)")
+    plt.title("📊 Top 10 požymių pagal įtaką vietos prognozei")
+    plt.tight_layout()
+    plt.show()
+
     # 7. Prognozė dalyvaujantiems
     df_predict = df_cleaned[df_cleaned["PredictedParticipation"] == 1].copy()
     X_predict = df_predict[feature_names].fillna(0)
@@ -99,6 +119,6 @@ if __name__ == "__main__":
     predict_place_with_participation(
         cleaned_data_path="data/female_athletes_cleaned_final.csv",
         binary_data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2025-03-23 10 (12.5  Mass Start Competition) W",
+        target_column="2025-02-16 07 (10  Pursuit Competition) W",
         output_dir="data/"
     )
