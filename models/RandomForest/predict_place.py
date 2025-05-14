@@ -99,6 +99,6 @@ if __name__ == "__main__":
     predict_place_with_participation(
         cleaned_data_path="data/female_athletes_cleaned_final.csv",
         binary_data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2024-12-04 01 (12.5  Short Individual) W",
-        output_dir="models/RandomForest"
+        target_column="2025-03-23 10 (12.5  Mass Start Competition) W",
+        output_dir="data/"
     )

@@ -19,53 +19,28 @@ def get_past_events():
         print(f"Klaida gaunant praėjusius etapus: {str(e)}")
         return []
     
-def predict_next_event(race_type):
+def predict_next_event(event, model_name):
     """
-    Prognozuoja būsimo etapo rezultatus pagal nurodytą rungties tipą.
-    
-    Args:
-        race_type (str): Rungties tipas (Sprint, Pursuit, Mass Start, Individual)
-        
-    Returns:
-        list: TOP sportininkių prognozės
+    Prognozuoja konkretaus etapo rezultatus pagal modelį.
     """
     try:
-        # Įkeliame duomenis
         df = load_data(DATA_FILE)
-        
-        # Gauname sportininkių indeksus, kurios greičiausiai dalyvaus
-        # Paprastam demonstravimui, imame visas sportininkes
-        likely_participants = list(range(len(df)))
-        
-        # Sukuriame sintetinius taikinius apmokyti modelį
-        # Čia reikėtų pritaikyti pagal jūsų konkrečius poreikius
-        race_cols = [col for col in df.columns if "(" in col and ")" in col]
-        race_cols = [col for col in race_cols if race_type in col]
-        
-        if not race_cols:
-            return []
-        
-        # Naudojame paskutiniuosius 3 tos rungties etapus
-        last_races = sorted(race_cols)[-3:]
-        
-        # Paimame vardus ir šalis
+
         names = df["FullName"]
         nations = df["Nation"]
-        
-        # Prognozuojam rezultatus
-        # Čia reikėtų pritaikyti pagal jūsų konkrečius poreikius
-        # Tai yra supaprastinta versija
+
+        # Tiesiog imitacija – čia turėtų būti realus modelio naudojimas
+        sorted_df = df.sort_values(by=event).dropna(subset=[event])
         top_athletes = []
-        for i in range(min(TOP_PREDICTIONS_COUNT, len(likely_participants))):
-            # Imituojame prognozavimą (realiame projekte čia būtų panaudotas modelis)
+        for i, (_, row) in enumerate(sorted_df.head(TOP_PREDICTIONS_COUNT).iterrows()):
             top_athletes.append({
                 "rank": i + 1,
-                "name": names.iloc[likely_participants[i]],
-                "nation": nations.iloc[likely_participants[i]],
+                "name": row["FullName"],
+                "nation": row["Nation"],
                 "predicted": f"{i+1} vieta"
             })
-        
+
         return top_athletes
     except Exception as e:
-        print(f"Klaida prognozuojant būsimą etapą: {str(e)}")
+        print(f"Klaida prognozuojant etapą: {str(e)}")
         return []

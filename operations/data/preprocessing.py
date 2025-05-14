@@ -49,7 +49,7 @@ def fill_result_columns(df, last_group_col):
                 .str.strip()
             )
             df[col] = pd.to_numeric(df[col], errors='coerce')
-            df[col] = df[col].fillna(999)  # Nedalyvavo
+            df[col] = df[col].fillna(100)  # Nedalyvavo
     return df
 
 def final_cleaning_and_encoding(df):

@@ -1,15 +1,21 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
-from web.web_actions import get_past_events, predict_next_event
+from web.web_actions import get_past_events
+from models.RandomForest.predict_place import predict_place_with_participation
+from models.RandomForest.predict_participation import predict_participation
 from operations.data.loader import load_data
+import pandas as pd
 import os
 
+CLEANED_CSV = "data/female_athletes_cleaned_final.csv"
+BINARY_CSV = "data/female_athletes_binary_competitions.csv"
 DATA_FILE = os.path.join('data', 'female_athletes_2425_full_stats_with_ranks.csv')
+
+web_bp = Blueprint('web', __name__)
 
 web_bp = Blueprint('web', __name__)
 
 @web_bp.route('/')
 def index():
-    """Pagrindinis puslapis."""
     past_events = get_past_events()
     return render_template('index.html', past_events=past_events)
 
@@ -54,12 +60,38 @@ def show_results():
     
 @web_bp.route('/predict', methods=['POST'])
 def predict():
-    """Prognozuoja būsimo etapo rezultatus."""
-    race_type = request.form.get('race_type')
-    predictions = predict_next_event(race_type)
-    
-    return render_template('result.html', 
-                          results=predictions, 
-                          event=f"Būsimas {race_type} etapas", 
-                          is_past=False)
+    model_name = request.form.get('model')
+    event = request.form.get('event')
 
+    if model_name != "random_forest":
+        flash("Šiuo metu palaikomas tik 'Random Forest' modelis.", "error")
+        return redirect(url_for("web.index"))
+
+    try:
+        # 1. Paleidžiam dalyvavimo prognozę
+        predict_participation(
+            data_path=BINARY_CSV,
+            target_column=event,
+            output_dir="data"
+        )
+
+        # 2. Tada paleidžiam vietos prognozę
+        predict_place_with_participation(
+            cleaned_data_path=CLEANED_CSV,
+            binary_data_path=BINARY_CSV,
+            target_column=event,
+            output_dir="models/RandomForest"
+        )
+
+        # 3. Nuskaitom rezultatų CSV
+        filename = f"predicted_places_{event.replace(' ', '_').replace('(', '').replace(')', '')}.csv"
+        filepath = os.path.join("models/RandomForest", filename)
+        df = pd.read_csv(filepath)
+
+        results_list = df[["PredictedRank", "FullName", "PredictedPlace", "ActualPlace"]].to_dict(orient="records")
+
+        return render_template("result.html", results=results_list, event=event, is_past=False)
+    
+    except Exception as e:
+        flash(f"Klaida prognozuojant: {str(e)}", "error")
+        return redirect(url_for("web.index"))

@@ -17,34 +17,25 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Blokas 1: Įvykusių rezultatų peržiūra -->
-    <h2>1. Įvykusių etapų rezultatai</h2>
-    <form method="post" action="/show_results">
-        <label for="event">Pasirinkite įvykusį etapą:</label><br>
-        <select name="event" required>
-            {% for event in past_events %}
-                <option value="{{ event }}">{{ event }}</option>
-            {% endfor %}
-        </select><br><br>
-        <input type="submit" value="Rodyti rezultatus">
-    </form>
-
     <hr>
 
-    <!-- Blokas 2: Būsimo etapo prognozė -->
-    <h2>2. Būsimo etapo prognozė</h2>
-    <form method="post" action="/predict">
-        <label for="race_type">Pasirinkite rungties tipą:</label><br>
-        <select name="race_type" required>
-            <option value="Sprint">Sprint</option>
-            <option value="Pursuit">Pursuit</option>
-            <option value="Mass Start">Mass Start</option>
-            <option value="Individual">Individual</option>
-        </select><br><br>
-        <input type="submit" value="Prognozuoti">
-    </form>
+        <!-- Blokas 2: Buvusio etapo prognozė -->
+        <h2>1. Buvusio etapo prognozė su rezultatais</h2>
+        <form method="post" action="/predict">
+            <label for="model">Pasirinkite modelį:</label><br>
+            <select name="model" id="model" required>
+                <option value="random_forest">Random Forest</option>
+            </select><br><br>
 
-    <hr>
+            <label for="event">Pasirinkite etapą:</label><br>
+            <select name="event" id="event" required>
+                {% for event in past_events %}
+                    <option value="{{ event }}">{{ event }}</option>
+                {% endfor %}
+            </select><br><br>
+
+            <input type="submit" value="Prognozuoti">
+        </form>
 
     <!-- Atnaujinti duomenis mygtukas -->
     <form action="/update" method="get">
