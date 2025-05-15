@@ -1,86 +1,159 @@
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import classification_report, make_scorer, f1_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_squared_error, confusion_matrix, f1_score, precision_score, recall_score, accuracy_score
 import os
 import joblib
 from datetime import datetime
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
-from sklearn.metrics import precision_score, recall_score, f1_score
+import seaborn as sns
 
 def predict_participation(data_path, target_column, output_dir="data/"):
     df = pd.read_csv(data_path)
 
     competition_columns = [col for col in df.columns if col.startswith("202")]
-    
-    if target_column not in df.columns:
-        raise ValueError(f"Nurodytas stulpelis '{target_column}' nerastas faile.")
-
     competition_columns_sorted = sorted(
         competition_columns, 
         key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d")
     )
-    
-    target_index = competition_columns_sorted.index(target_column)
-    past_columns = competition_columns_sorted[:target_index]
-    
-    assert target_column not in past_columns, "Klaida: tikslo stulpelis pateko į požymius!"
-    
+
     static_features = [col for col in df.columns if not col.startswith("202") and col not in ["IBUId", "FullName"]]
-    df_model = df.dropna(subset=[target_column])
-    
-    X = df_model[static_features + past_columns]
-    y = df_model[target_column].astype(int)
-    
-    assert target_column not in X.columns, "Klaida: tikslo stulpelis yra tarp požymių!"
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    f1 = make_scorer(f1_score, average='macro')
-    param_grid = {'n_estimators': list(range(5, 305, 5))}
+    train_end_date = "2024-12-22"
+    val_end_date = "2025-01-25"
 
+    train_columns = [col for col in competition_columns_sorted 
+                     if datetime.strptime(col.split(" ")[0], "%Y-%m-%d") <= datetime.strptime(train_end_date, "%Y-%m-%d")]
+    val_columns = [col for col in competition_columns_sorted 
+                   if datetime.strptime(train_end_date, "%Y-%m-%d") < datetime.strptime(col.split(" ")[0], "%Y-%m-%d") <= datetime.strptime(val_end_date, "%Y-%m-%d")]
+    test_columns = [col for col in competition_columns_sorted 
+                    if datetime.strptime(col.split(" ")[0], "%Y-%m-%d") > datetime.strptime(val_end_date, "%Y-%m-%d")]
+
+    print(f"Treniravimo etapų: {len(train_columns)}")
+    print(f"Validacijos etapų: {len(val_columns)}")
+    print(f"Testavimo etapų: {len(test_columns)}")
+
+    X_train = df[static_features + train_columns]
+    y_train = df[val_columns[0]].fillna(0).astype(float)
+
+    param_grid = {'n_estimators': list(range(50, 251, 50))}
+
+    print("\n🔍 Vykdoma GridSearchCV optimizacija...")
     grid_search = GridSearchCV(
-        RandomForestClassifier(class_weight='balanced', random_state=42),
+        RandomForestRegressor(random_state=42),
         param_grid=param_grid,
-        scoring=f1,
-        cv=5,
+        scoring="neg_mean_squared_error",
+        cv=3,
         n_jobs=-1,
         verbose=1
     )
-
-    print("\n🔍 Vykdoma GridSearchCV optimizacija...")
     grid_search.fit(X_train, y_train)
     model = grid_search.best_estimator_
-    print(f"\n✅ Geriausias modelis: n_estimators={grid_search.best_params_['n_estimators']} su F1-score={grid_search.best_score_:.4f}")
 
-    os.makedirs(output_dir, exist_ok=True)
-    model_path = os.path.join(output_dir, f"model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
-    joblib.dump((model, list(X.columns)), model_path)
-    print(f"Modelis išsaugotas: {model_path}")
+    print(f"\n✅ Geriausias modelis: n_estimators={grid_search.best_params_['n_estimators']} su MSE={-grid_search.best_score_:.4f}")
 
-    y_pred = model.predict(X_test)
-    report_dict = classification_report(y_test, y_pred, output_dict=True)
-    report_text = classification_report(y_test, y_pred, output_dict=False)
-    print(f"\nModelio rezultatai prognozuojant '{target_column}':\n")
-    print(report_text)
+    # Validacijos rezultatai
+    print("\n📊 Validacijos rezultatai:")
+    val_accuracy = []
+    val_precision = []
+    val_recall = []
+    val_f1 = []
 
-    # Confusion matrix
-    cm = confusion_matrix(y_test, y_pred)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-    disp.plot(cmap=plt.cm.Blues)
-    plt.title("Sujaukimo matrica")
-    plt.show()
+    for val_target in val_columns[1:]:
+        y_val = df[val_target].fillna(0).astype(float)
+        y_val_binary = y_val.astype(int)  # Konvertuojame į dvejetainį formatą statistikos skaičiavimui
+        
+        raw_preds = model.predict(X_train)
+        val_pred = adjust_predictions_by_format(raw_preds, val_target)
+        
+        # Skaičiuojame statistikas
+        accuracy = accuracy_score(y_val_binary, val_pred)
+        precision = precision_score(y_val_binary, val_pred, zero_division=0)
+        recall = recall_score(y_val_binary, val_pred, zero_division=0)
+        f1 = f1_score(y_val_binary, val_pred, zero_division=0)
+        
+        val_accuracy.append(accuracy)
+        val_precision.append(precision)
+        val_recall.append(recall)
+        val_f1.append(f1)
+        
+        # Statistikų lentelė
+        print(f"\nEtapas {val_target}:")
+        print(f"Vidutinė prognozė: {np.mean(raw_preds):.4f}, Pasirinktos sportininkės: {sum(val_pred)}")
+        print("\nStatistikos:")
+        print(f"{'':12} precision    recall  f1-score   support")
+        print(f"{'0':12} {precision_score(y_val_binary, val_pred, pos_label=0, zero_division=0):.2f}      {recall_score(y_val_binary, val_pred, pos_label=0, zero_division=0):.2f}     {f1_score(y_val_binary, val_pred, pos_label=0, zero_division=0):.2f}       {sum(y_val_binary == 0)}")
+        print(f"{'1':12} {precision:.2f}      {recall:.2f}     {f1:.2f}       {sum(y_val_binary == 1)}")
+        print(f"\naccuracy{'':<7} {'':<5} {'':<5} {accuracy:.2f}       {len(y_val_binary)}")
+        print(f"macro avg{'':<4} {np.mean([precision_score(y_val_binary, val_pred, pos_label=0, zero_division=0), precision]):.2f}      {np.mean([recall_score(y_val_binary, val_pred, pos_label=0, zero_division=0), recall]):.2f}     {np.mean([f1_score(y_val_binary, val_pred, pos_label=0, zero_division=0), f1]):.2f}       {len(y_val_binary)}")
+        print(f"weighted avg{''} {precision_score(y_val_binary, val_pred, average='weighted', zero_division=0):.2f}      {recall_score(y_val_binary, val_pred, average='weighted', zero_division=0):.2f}     {f1_score(y_val_binary, val_pred, average='weighted', zero_division=0):.2f}       {len(y_val_binary)}")
+        
+        # Sujaukimo matrica
+        cm = confusion_matrix(y_val_binary, val_pred)
+        print("\nSujaukimo matrica:")
+        print(f"TN: {cm[0,0]}, FP: {cm[0,1]}")
+        print(f"FN: {cm[1,0]}, TP: {cm[1,1]}")
 
-    # Tikri ir klaidingi atvejai
-    if cm.shape == (2, 2):
-        tn, fp, fn, tp = cm.ravel()
-        print(f"\n🔢 Statistika:\nTikri teigiami (TP): {tp}\nTikri neigiami (TN): {tn}\nKlaidingi teigiami (FP): {fp}\nKlaidingi neigiami (FN): {fn}")
+    # Rengiame galutinį modelį
+    X_final = df[static_features + train_columns + val_columns]
+    y_final = df[test_columns[0]].fillna(0).astype(float)
+
+    final_model = RandomForestRegressor(
+        n_estimators=grid_search.best_params_['n_estimators'],
+        random_state=42
+    )
+
+    print("\n🔄 Treninguojamas galutinis modelis su visais žinomais duomenimis...")
+    final_model.fit(X_final, y_final)
+
+    # Testavimo rezultatai
+    print("\n📋 Testavimo rezultatai:")
+    test_accuracy = []
+    test_precision = []
+    test_recall = []
+    test_f1 = []
+    test_etapai = []
+
+    for test_target in test_columns[1:]:
+        y_test = df[test_target].fillna(0).astype(float)
+        y_test_binary = y_test.astype(int)
+        
+        raw_preds = final_model.predict(X_final)
+        test_pred = adjust_predictions_by_format(raw_preds, test_target)
+        
+        # Skaičiuojame statistikas
+        accuracy = accuracy_score(y_test_binary, test_pred)
+        precision = precision_score(y_test_binary, test_pred, zero_division=0)
+        recall = recall_score(y_test_binary, test_pred, zero_division=0)
+        f1 = f1_score(y_test_binary, test_pred, zero_division=0)
+        
+        test_accuracy.append(accuracy)
+        test_precision.append(precision)
+        test_recall.append(recall)
+        test_f1.append(f1)
+        test_etapai.append(datetime.strptime(test_target.split(" ")[0], "%Y-%m-%d"))
+        
+        # Statistikų lentelė
+        print(f"\nEtapas {test_target}:")
+        print(f"Vidutinė prognozė: {np.mean(raw_preds):.4f}, Pasirinktos sportininkės: {sum(test_pred)}")
+        print("\nStatistikos:")
+        print(f"{'':12} precision    recall  f1-score   support")
+        print(f"{'0':12} {precision_score(y_test_binary, test_pred, pos_label=0, zero_division=0):.2f}      {recall_score(y_test_binary, test_pred, pos_label=0, zero_division=0):.2f}     {f1_score(y_test_binary, test_pred, pos_label=0, zero_division=0):.2f}       {sum(y_test_binary == 0)}")
+        print(f"{'1':12} {precision:.2f}      {recall:.2f}     {f1:.2f}       {sum(y_test_binary == 1)}")
+        print(f"\naccuracy{'':<7} {'':<5} {'':<5} {accuracy:.2f}       {len(y_test_binary)}")
+        print(f"macro avg{'':<4} {np.mean([precision_score(y_test_binary, test_pred, pos_label=0, zero_division=0), precision]):.2f}      {np.mean([recall_score(y_test_binary, test_pred, pos_label=0, zero_division=0), recall]):.2f}     {np.mean([f1_score(y_test_binary, test_pred, pos_label=0, zero_division=0), f1]):.2f}       {len(y_test_binary)}")
+        print(f"weighted avg{''} {precision_score(y_test_binary, test_pred, average='weighted', zero_division=0):.2f}      {recall_score(y_test_binary, test_pred, average='weighted', zero_division=0):.2f}     {f1_score(y_test_binary, test_pred, average='weighted', zero_division=0):.2f}       {len(y_test_binary)}")
+        
+        # Sujaukimo matrica
+        cm = confusion_matrix(y_test_binary, test_pred)
+        print("\nSujaukimo matrica:")
+        print(f"TN: {cm[0,0]}, FP: {cm[0,1]}")
+        print(f"FN: {cm[1,0]}, TP: {cm[1,1]}")
 
     # Požymių svarba
-    importances = model.feature_importances_
-    feature_names = X.columns
+    importances = final_model.feature_importances_
+    feature_names = X_final.columns
     feature_importance = pd.DataFrame({
         "Feature": feature_names,
         "Importance": importances
@@ -95,43 +168,121 @@ def predict_participation(data_path, target_column, output_dir="data/"):
     plt.tight_layout()
     plt.show()
 
-    # GridSearch n_estimators rezultatai
+    # GridSearch rezultatų grafikas
     results = pd.DataFrame(grid_search.cv_results_)
     plt.figure(figsize=(10, 6))
-    plt.plot(results['param_n_estimators'], results['mean_test_score'], marker='o')
+    plt.plot(results['param_n_estimators'], -results['mean_test_score'], marker='o')
     plt.xlabel("n_estimators")
-    plt.ylabel("Vidutinis F1-score (5-fold CV)")
-    plt.title("F1-score priklausomybė nuo n_estimators")
+    plt.ylabel("Vidutinis MSE (CV)")
+    plt.title("MSE priklausomybė nuo n_estimators")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+    
+    # Testavimo rezultatų grafikas
+    if test_etapai:
+        plt.figure(figsize=(12, 10))
+        
+        plt.subplot(2, 2, 1)
+        plt.plot(test_etapai, test_accuracy, 'o-', label='Accuracy')
+        plt.xlabel("Data")
+        plt.ylabel("Accuracy")
+        plt.title("Tikslumas pagal etapą")
+        plt.grid(True)
+        
+        plt.subplot(2, 2, 2)
+        plt.plot(test_etapai, test_precision, 'o-', label='Precision (klasė 1)')
+        plt.xlabel("Data")
+        plt.ylabel("Precision")
+        plt.title("Precision pagal etapą")
+        plt.grid(True)
+        
+        plt.subplot(2, 2, 3)
+        plt.plot(test_etapai, test_recall, 'o-', label='Recall (klasė 1)')
+        plt.xlabel("Data")
+        plt.ylabel("Recall")
+        plt.title("Recall pagal etapą")
+        plt.grid(True)
+        
+        plt.subplot(2, 2, 4)
+        plt.plot(test_etapai, test_f1, 'o-', label='F1-score (klasė 1)')
+        plt.xlabel("Data")
+        plt.ylabel("F1-score")
+        plt.title("F1-score pagal etapą")
+        plt.grid(True)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # Sujaukimo matricos vizualizacija paskutiniam testavimo etapui
+        if test_columns:
+            y_last = df[test_columns[-1]].fillna(0).astype(int)
+            raw_preds_last = final_model.predict(X_final)
+            preds_last = adjust_predictions_by_format(raw_preds_last, test_columns[-1])
+            
+            plt.figure(figsize=(8, 6))
+            cm_last = confusion_matrix(y_last, preds_last)
+            sns.heatmap(cm_last, annot=True, fmt='d', cmap='Blues', 
+                        xticklabels=['Nedalyvauja', 'Dalyvauja'],
+                        yticklabels=['Nedalyvauja', 'Dalyvauja'])
+            plt.xlabel('Prognozuota klasė')
+            plt.ylabel('Tikroji klasė')
+            plt.title(f'Sujaukimo matrica ({test_columns[-1]})')
+            plt.tight_layout()
+            plt.show()
 
+    # Išsaugome modelį
+    os.makedirs(output_dir, exist_ok=True)
+    model_path = os.path.join(output_dir, f"model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
+    joblib.dump((final_model, list(X_final.columns)), model_path)
+    print(f"\nModelis išsaugotas: {model_path}")
 
-    thresholds = np.linspace(0, 1, 101)
-    precisions, recalls, f1s = [], [], []
-    y_proba = model.predict_proba(X_test)[:, 1]
+    # Prognozavimas būsimam etapui
+    if target_column not in competition_columns:
+        print(f"\n🔮 Prognozuojamas dalyvavimas būsimame etape: {target_column}")
+        future_pred_raw = final_model.predict(X_final)
+        future_pred = adjust_predictions_by_format(future_pred_raw, target_column)
 
-    for t in thresholds:
-        preds = (y_proba >= t).astype(int)
-        precisions.append(precision_score(y_test, preds, zero_division=0))
-        recalls.append(recall_score(y_test, preds, zero_division=0))
-        f1s.append(f1_score(y_test, preds, zero_division=0))
+        # Sukuriame DataFrame su prognozėmis ir sportininkių tikimybių reitingais
+        predictions_df = pd.DataFrame({
+            "IBUId": df["IBUId"],
+            "FullName": df["FullName"],
+            "RawScore": future_pred_raw,
+            "PredictedParticipation": future_pred
+        }).sort_values(by="RawScore", ascending=False)
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(thresholds, precisions, label='Precision')
-    plt.plot(thresholds, recalls, label='Recall')
-    plt.plot(thresholds, f1s, label='F1-score')
-    plt.xlabel('Slenkstis (threshold)')
-    plt.ylabel('Reikšmė')
-    plt.title('Rodiklių priklausomybė nuo klasifikavimo slenksčio')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+        # Išsaugome prognozes
+        predictions_path = os.path.join(output_dir, f"predictions_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.csv")
+        predictions_df.to_csv(predictions_path, index=False)
+        print(f"Prognozės išsaugotos: {predictions_path}")
+        print(f"Prognozuojamas dalyvių skaičius: {sum(future_pred)}")
+        
+        # Rodome TOP-10 sportininkių prognozes
+        print("\nTOP-10 sportininkių pagal prognozuojamą dalyvavimo reitingą:")
+        top_10 = predictions_df.head(10)
+        for _, row in top_10.iterrows():
+            print(f"{row['FullName']} (Reitingas: {row['RawScore']:.4f})")
 
+def adjust_predictions_by_format(pred_scores, competition_name):
+    if "Mass Start" in competition_name:
+        target_count = 30
+        format_type = "Mass Start"
+    elif "Pursuit" in competition_name:
+        target_count = 60
+        format_type = "Pursuit"
+    else:
+        target_count = 100
+        format_type = "Individual/Sprint"
+
+    top_indices = np.argsort(pred_scores)[-target_count:]
+    binary_selection = np.zeros_like(pred_scores, dtype=int)
+    binary_selection[top_indices] = 1
+
+    print(f"Pritaikytas formatas: {format_type} ({target_count} sportininkės)")
+    return binary_selection
 
 if __name__ == "__main__":
     predict_participation(
         data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2025-02-23 07 (12.5  Mass Start Competition) W"
+        target_column="2025-12-02 01 (15  Individual Competition) W"
     )
