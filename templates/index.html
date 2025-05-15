@@ -19,25 +19,25 @@
 
     <hr>
 
-        <!-- Blokas 2: Buvusio etapo prognozė -->
-        <h2>1. Buvusio etapo prognozė su rezultatais</h2>
-        <form method="post" action="/predict">
-            <label for="model">Pasirinkite modelį:</label><br>
-            <select name="model" id="model" required>
-                <option value="random_forest">Random Forest</option>
-            </select><br><br>
+    <!-- Prognozė pagal pasirinkto tipo būsimą etapą -->
+    <h2>1. Sekančio etapo prognozė pagal tipą</h2>
+    <form method="post" action="/predict_next">
+        <label for="model">Pasirinkite modelį:</label><br>
+        <select name="model" id="model" required>
+            <option value="random_forest">Random Forest</option>
+        </select><br><br>
 
-            <label for="event">Pasirinkite etapą:</label><br>
-            <select name="event" id="event" required>
-                {% for event in past_events %}
-                    <option value="{{ event }}">{{ event }}</option>
-                {% endfor %}
-            </select><br><br>
+        <label for="event_type">Pasirinkite etapo tipą:</label><br>
+        <select name="event_type" id="event_type" required>
+            <option value="Sprint">Sprint</option>
+            <option value="Pursuit">Pursuit</option>
+            <option value="Individual">Individual</option>
+            <option value="Mass Start">Mass Start</option>
+        </select><br><br>
 
-            <input type="submit" value="Prognozuoti">
-        </form>
+        <input type="submit" value="Prognozuoti">
+    </form>
 
-    <!-- Atnaujinti duomenis mygtukas -->
     <form action="/update" method="get">
         <button type="submit">Atnaujinti duomenis</button>
     </form>

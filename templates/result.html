@@ -2,15 +2,25 @@
     <tr>
         <th>#</th>
         <th>Vardas</th>
-        <th>Prognozuota vieta</th>
-        <th>Reali vieta</th>
+        <th>Tauta</th>
+        {% if is_past %}
+            <th>Vieta</th>
+        {% else %}
+            <th>Prognozė</th>
+            <th>Reali vieta</th>
+        {% endif %}
     </tr>
     {% for item in results %}
         <tr>
-            <td>{{ item['PredictedRank'] }}</td>
-            <td>{{ item['FullName'] }}</td>
-            <td>{{ "%.2f"|format(item['PredictedPlace']) }}</td>
-            <td>{{ item['ActualPlace'] }}</td>
+            <td>{{ loop.index }}</td>
+            <td>{{ item['name'] if item.get('name') else item['FullName'] }}</td>
+            <td>{{ item['nation'] if item.get('nation') else '' }}</td>
+            {% if is_past %}
+                <td>{{ item['rank'] }}</td>
+            {% else %}
+                <td>{{ "%.2f"|format(item['PredictedPlace']) }}</td>
+                <td>{{ item['ActualPlace'] }}</td>
+            {% endif %}
         </tr>
     {% endfor %}
 </table>
