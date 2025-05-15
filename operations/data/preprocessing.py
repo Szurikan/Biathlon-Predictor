@@ -49,7 +49,18 @@ def fill_result_columns(df, last_group_col):
                 .str.strip()
             )
             df[col] = pd.to_numeric(df[col], errors='coerce')
-            df[col] = df[col].fillna(100)  # Nedalyvavo
+    return df
+
+def fill_missing_with_personal_average(df):
+    competition_columns = [col for col in df.columns if col.startswith("202")]
+    for idx, row in df.iterrows():
+        values = row[competition_columns]
+        mean_val = values[values.notna()].mean()
+        if pd.isna(mean_val):
+            continue
+        for col in competition_columns:
+            if pd.isna(df.at[idx, col]):
+                df.at[idx, col] = mean_val
     return df
 
 def final_cleaning_and_encoding(df):

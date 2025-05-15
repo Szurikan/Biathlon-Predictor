@@ -5,7 +5,8 @@ from operations.data.preprocessing import (
     fill_result_columns,
     final_cleaning_and_encoding,
     save_cleaned_data,
-    encode_competition_participation
+    encode_competition_participation,
+    fill_missing_with_personal_average
 )
 
 def main():
@@ -27,6 +28,7 @@ def main():
     df = final_cleaning_and_encoding(df)
     encode_competition_participation(df, binary_output)
     df = fill_result_columns(df, last_group_col='SkiKMB_21_22')
+    df = fill_missing_with_personal_average(df)
     save_cleaned_data(df, output_path)
    
     

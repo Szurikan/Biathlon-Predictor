@@ -98,5 +98,5 @@ def predict_participation_lstm(data_path, target_column, output_dir="models/LSTM
 if __name__ == "__main__":
     predict_participation_lstm(
         data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2025-03-13 09 (12.5  Short Individual) W"
+        target_column="2025-02-23 07 (12.5  Mass Start Competition) W"
     )
