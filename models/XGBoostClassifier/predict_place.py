@@ -4,138 +4,145 @@ import os
 import joblib
 from datetime import datetime
 import matplotlib.pyplot as plt
+import seaborn as sns
 from xgboost import XGBRegressor
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error
 
-def predict_place_with_participation_xgb(
-    cleaned_data_path,
-    binary_data_path,
-    target_column,
-    output_dir="models/XGBoost"
-):
-    # 1. Įkeliame duomenis
-    df_cleaned = pd.read_csv(cleaned_data_path)
-    df_binary = pd.read_csv(binary_data_path)
+def evaluate_regression_phase(df, model, X, columns, phase):
+    all_true, all_pred = [], []
+    stats_list = []
 
-    # 2. Nustatome požymius
-    competition_columns = [col for col in df_binary.columns if col.startswith("202")]
-    competition_columns_sorted = sorted(
-        competition_columns,
-        key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d")
-    )
-    target_index = competition_columns_sorted.index(target_column)
-    past_columns = competition_columns_sorted[:target_index]
+    for col in columns[1:]:
+        y_true = df[col].copy()
+        y_pred = model.predict(X)
+        mask = y_true.notna()
+        y_true = y_true[mask]
+        y_pred = pd.Series(y_pred, index=X.index)[mask]
 
-    static_features = [
-        col for col in df_cleaned.columns
-        if not col.startswith("202") and col not in ["IBUId", "FullName"]
-    ]
-    feature_names = static_features + past_columns
+        mae = mean_absolute_error(y_true, y_pred)
+        rmse = mean_squared_error(y_true, y_pred) ** 0.5
+        medae = median_absolute_error(y_true, y_pred)
 
-    # 3. Įkeliame dalyvavimo modelį
-    model_name = f"xgb_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
-    model_path = os.path.join("data", model_name)
-    loaded = joblib.load(model_path)
-    clf, clf_feature_names = loaded if isinstance(loaded, tuple) else (loaded, feature_names)
+        print(f"\n📊 {phase} etapas: {col}")
+        print(f"MAE: {mae:.2f}, RMSE: {rmse:.2f}, MedAE: {medae:.2f}")
 
-    df_binary_features = df_binary[clf_feature_names].fillna(0)
-    df_cleaned["PredictedParticipation"] = clf.predict(df_binary_features)
+        stats_list.append({
+            "Etapas": col,
+            "MAE": mae,
+            "RMSE": rmse,
+            "MedAE": medae
+        })
 
-    # 4. Mokymo duomenys (tik su žinoma vieta)
-    df_train = df_cleaned[df_cleaned[target_column].notna()].copy()
-    X = df_train[feature_names].fillna(0)
-    y = df_train[target_column].astype(float)
+        all_true.extend(y_true)
+        all_pred.extend(y_pred)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    return stats_list, all_true, all_pred
 
-    # 5. GridSearch
-    param_grid = {
-        'n_estimators': [50, 100, 150],
-        'max_depth': [3, 5, 7],
-        'learning_rate': [0.01, 0.1, 0.2]
-    }
-    grid_search = GridSearchCV(
+def plot_all_metrics(dates, maes, rmses, medaes):
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 3, 1)
+    plt.plot(dates, maes, 'o-', label='MAE')
+    plt.title("MAE pagal etapą")
+    plt.xlabel("Data")
+    plt.ylabel("MAE")
+    plt.grid(True)
+
+    plt.subplot(1, 3, 2)
+    plt.plot(dates, rmses, 'o-', label='RMSE', color='orange')
+    plt.title("RMSE pagal etapą")
+    plt.xlabel("Data")
+    plt.ylabel("RMSE")
+    plt.grid(True)
+
+    plt.subplot(1, 3, 3)
+    plt.plot(dates, medaes, 'o-', label='MedAE', color='green')
+    plt.title("MedAE pagal etapą")
+    plt.xlabel("Data")
+    plt.ylabel("MedAE")
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+def show_error_percentiles(y_true, y_pred):
+    errors = np.abs(np.array(y_true) - np.array(y_pred))
+    percentiles = [50, 75, 90, 95]
+    print("\n📈 Klaidų paskirstymo percentiliai:")
+    for p in percentiles:
+        print(f"{p}%% klaida < {np.percentile(errors, p):.2f} vietų")
+
+    plt.figure(figsize=(8, 5))
+    sns.histplot(errors, bins=30, kde=True, color="skyblue")
+    plt.title("Prognozės klaidų pasiskirstymas")
+    plt.xlabel("Absoliuti klaida (vietų skirtumas)")
+    plt.ylabel("Sportininkių skaičius")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def predict_place_xgb(data_path, target_column, output_dir="data/"):
+    df = pd.read_csv(data_path)
+    comp_cols = sorted([c for c in df.columns if c.startswith("202")], key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
+    static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
+
+    train_date, val_date = "2024-12-22", "2025-01-25"
+    train_cols = [c for c in comp_cols if datetime.strptime(c.split()[0], "%Y-%m-%d") <= datetime.strptime(train_date, "%Y-%m-%d")]
+    val_cols = [c for c in comp_cols if train_date < c.split()[0] <= val_date]
+    test_cols = [c for c in comp_cols if c.split()[0] > val_date]
+
+    X_train = df[static_feats + train_cols].fillna(0)
+    y_train = df[val_cols[0]].copy()
+    y_train = y_train[y_train.notna()]
+    X_train = X_train.loc[y_train.index]
+
+    grid = GridSearchCV(
         XGBRegressor(objective='reg:squarederror', random_state=42),
-        param_grid,
+        {
+            'n_estimators': [50, 100, 150],
+            'max_depth': [3, 5, 7],
+            'learning_rate': [0.05, 0.1, 0.2]
+        },
         scoring='neg_mean_absolute_error',
-        cv=5,
-        n_jobs=-1,
-        verbose=1
+        cv=3,
+        n_jobs=-1
     )
+    grid.fit(X_train, y_train)
+    best_model = grid.best_estimator_
 
-    print("\n🔍 Vykdoma GridSearchCV optimizacija...")
-    grid_search.fit(X_train, y_train)
-    model = grid_search.best_estimator_
-    print(f"\n✅ Geriausias modelis: {grid_search.best_params_}")
+    print(f"\n✅ Geriausias modelis: {grid.best_params_}")
+    print("\n📊 Validacijos rezultatai:")
+    evaluate_regression_phase(df, best_model, X_train, val_cols, "Val")
 
-    # 6. Modelio įvertinimas
-    y_pred = model.predict(X_test)
-    mae = mean_absolute_error(y_test, y_pred)
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    r2 = r2_score(y_test, y_pred)
+    X_final = df[static_feats + train_cols].fillna(0)
+    y_final = df[test_cols[0]].copy()
+    y_final = y_final[y_final.notna()]
+    X_final = X_final.loc[y_final.index]
 
-    print("\n📊 Modelio rezultatai:")
-    print(f"MAE: {mae:.2f}")
-    print(f"RMSE: {rmse:.2f}")
-    print(f"R2: {r2:.2f}")
+    final_model = XGBRegressor(**grid.best_params_, objective='reg:squarederror', random_state=42)
+    final_model.fit(X_final, y_final)
 
-    # 7. Požymių svarbos grafikas
-    importances = model.feature_importances_
-    feature_importance = pd.DataFrame({
-        "Feature": feature_names,
-        "Importance": importances
-    }).sort_values(by="Importance", ascending=False)
+    print("\n📋 Testavimo rezultatai:")
+    test_stats, y_true_all, y_pred_all = evaluate_regression_phase(df, final_model, X_final, test_cols, "Test")
 
-    top_features = feature_importance.head(10)
-    plt.figure(figsize=(10, 6))
-    plt.barh(top_features["Feature"], top_features["Importance"], edgecolor='black')
-    plt.gca().invert_yaxis()
-    plt.xlabel("Svarba (feature importance)")
-    plt.title("Top 10 požymių (XGBoost)")
-    plt.tight_layout()
-    plt.show()
+    dates = [datetime.strptime(s['Etapas'].split()[0], "%Y-%m-%d") for s in test_stats]
+    plot_all_metrics(dates, [s["MAE"] for s in test_stats], [s["RMSE"] for s in test_stats], [s["MedAE"] for s in test_stats])
 
-    # 8. GridSearch rezultatai
-    results = pd.DataFrame(grid_search.cv_results_)
-    plt.figure(figsize=(10, 6))
-    for depth in sorted(results["param_max_depth"].unique()):
-        subset = results[results["param_max_depth"] == depth]
-        mean_scores = subset.groupby("param_n_estimators")["mean_test_score"].mean()
-        plt.plot(mean_scores.index, -mean_scores.values, marker='o', label=f"max_depth={depth}")
-    plt.title("MAE priklausomybė nuo n_estimators")
-    plt.xlabel("n_estimators")
-    plt.ylabel("Vidutinis MAE")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+    print("\n📊 Bendri testavimo rezultatai visiems etapams:")
+    print(f"Bendras MAE: {mean_absolute_error(y_true_all, y_pred_all):.3f}")
+    print(f"Bendras RMSE: {mean_squared_error(y_true_all, y_pred_all) ** 0.5:.3f}")
+    print(f"Bendras MedAE: {median_absolute_error(y_true_all, y_pred_all):.3f}")
 
-    # 9. Paklaidų histograma
-    errors = y_pred - y_test
-    plt.figure(figsize=(8, 6))
-    plt.hist(errors, bins=30, edgecolor='black', alpha=0.7)
-    plt.axvline(0, color='red', linestyle='--', linewidth=2)
-    plt.xlabel("Paklaida (prognozė - tikroji vieta)")
-    plt.ylabel("Stebėjimų skaičius")
-    plt.title("Modelio paklaidų histograma (XGBoost)")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+    show_error_percentiles(y_true_all, y_pred_all)
 
-    # 10. Modelio išsaugojimas
     os.makedirs(output_dir, exist_ok=True)
-    model_filename = f"xgb_regression_place_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
-    model_path = os.path.join(output_dir, model_filename)
-    joblib.dump((model, feature_names), model_path)
-    print(f"\n📦 Modelis išsaugotas: {model_path}")
+    model_path = os.path.join(output_dir, f"xgb_place_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
+    joblib.dump((final_model, list(X_final.columns)), model_path)
+    print(f"\nModelis išsaugotas: {model_path}")
 
 if __name__ == "__main__":
-    predict_place_with_participation_xgb(
-        cleaned_data_path="data/female_athletes_cleaned_final.csv",
-        binary_data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2025-02-23 07 (12.5  Mass Start Competition) W",
-        output_dir="data/"
+    predict_place_xgb(
+        data_path="data/female_athletes_cleaned_final.csv",
+        target_column="2025-12-02 01 (15  Individual Competition) W"
     )

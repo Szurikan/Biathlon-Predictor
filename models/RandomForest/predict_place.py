@@ -1,158 +1,139 @@
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
-import joblib
+import numpy as np
 import os
+import joblib
 from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error
 
-def predict_place_with_participation(
-    cleaned_data_path,
-    binary_data_path,
-    target_column,
-    output_dir="models/RandomForest"
-):
-    # 1. Įkeliame duomenis
-    df_cleaned = pd.read_csv(cleaned_data_path)
-    df_binary = pd.read_csv(binary_data_path)
+def evaluate_regression_phase(df, model, X, columns, phase):
+    all_true, all_pred = [], []
+    stats_list = []
 
-    # 2. Požymių atranka ir rūšiavimas
-    competition_columns = [col for col in df_binary.columns if col.startswith("202")]
-    competition_columns_sorted = sorted(
-        competition_columns,
-        key=lambda x: datetime.strptime(x.split(" ")[0], "%Y-%m-%d")
-    )
+    for col in columns[1:]:
+        y_true = df[col].copy()
+        y_pred = model.predict(X)
+        mask = y_true.notna()
+        y_true = y_true[mask]
+        y_pred = pd.Series(y_pred, index=X.index)[mask]
 
-    target_index = competition_columns_sorted.index(target_column)
-    past_columns = competition_columns_sorted[:target_index]
-    assert target_column not in past_columns, "❌ Klaida: tikslo stulpelis pateko į praeities stulpelius!"
+        mae = mean_absolute_error(y_true, y_pred)
+        rmse = mean_squared_error(y_true, y_pred) ** 0.5
+        medae = median_absolute_error(y_true, y_pred)
 
-    static_features = [
-        col for col in df_cleaned.columns
-        if not col.startswith("202") and col not in ["IBUId", "FullName"]
-    ]
+        print(f"\n📊 {phase} etapas: {col}")
+        print(f"MAE: {mae:.2f}, RMSE: {rmse:.2f}, MedAE: {medae:.2f}")
 
-    # Saugiklis: jei tikslinis stulpelis kažkaip pateko į static_features
-    if target_column in static_features:
-        print(f"⚠️ Perspėjimas: tikslo stulpelis buvo static_features sąraše – pašaliname: {target_column}")
-        static_features = [f for f in static_features if f != target_column]
+        stats_list.append({
+            "Etapas": col,
+            "MAE": mae,
+            "RMSE": rmse,
+            "MedAE": medae
+        })
 
-    feature_names = static_features + past_columns
+        all_true.extend(y_true)
+        all_pred.extend(y_pred)
 
-    # Dar kartą šaliname iš feature_names, jei vis dar įsimaišė
-    if target_column in feature_names:
-        print(f"⚠️ Perspėjimas: pašaliname tikslo stulpelį iš feature_names: {target_column}")
-        feature_names = [f for f in feature_names if f != target_column]
+    return stats_list, all_true, all_pred
 
-    # Patikrinimai prieš tęsiant
-    assert target_column not in feature_names, f"❌ Klaida: tikslo stulpelis vis dar yra feature_names!"
+def plot_all_metrics(dates, maes, rmses, medaes):
+    plt.figure(figsize=(14, 6))
 
-    print(f"📋 Požymių skaičius: {len(feature_names)}")
-    print(f"📋 Ar tikslo stulpelis tarp požymių? {'TAIP' if target_column in feature_names else 'NE'}")
+    plt.subplot(1, 3, 1)
+    plt.plot(dates, maes, 'o-', label='MAE')
+    plt.title("MAE pagal etapą")
+    plt.xlabel("Data")
+    plt.ylabel("MAE")
+    plt.grid(True)
 
-    # 3. Įkeliame dalyvavimo modelį
-    participation_model_filename = f"model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
-    participation_model_path = os.path.join("data", participation_model_filename)
+    plt.subplot(1, 3, 2)
+    plt.plot(dates, rmses, 'o-', label='RMSE', color='orange')
+    plt.title("RMSE pagal etapą")
+    plt.xlabel("Data")
+    plt.ylabel("RMSE")
+    plt.grid(True)
 
-    loaded = joblib.load(participation_model_path)
-    if isinstance(loaded, tuple):
-        clf, clf_feature_names = loaded
-    else:
-        clf = loaded
-        clf_feature_names = feature_names
+    plt.subplot(1, 3, 3)
+    plt.plot(dates, medaes, 'o-', label='MedAE', color='green')
+    plt.title("MedAE pagal etapą")
+    plt.xlabel("Data")
+    plt.ylabel("MedAE")
+    plt.grid(True)
 
-    df_binary_features = df_binary[clf_feature_names].fillna(0)
-    df_cleaned["PredictedParticipation"] = clf.predict(df_binary_features)
-
-    # 4. Mokymo duomenys
-    df_train = df_cleaned[df_cleaned[target_column].notna()].copy()
-    X = df_train[feature_names].fillna(0)
-    y = df_train[target_column].astype(float)
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    # 5. GridSearchCV
-    param_grid = {'n_estimators': list(range(5, 305, 5))}
-    grid_search = GridSearchCV(
-        RandomForestRegressor(random_state=42),
-        param_grid=param_grid,
-        scoring='neg_mean_absolute_error',
-        cv=5,
-        n_jobs=-1,
-        verbose=1
-    )
-
-    print("\n🔍 Vykdoma GridSearchCV optimizacija...")
-    grid_search.fit(X_train, y_train)
-    model = grid_search.best_estimator_
-    print(f"\n✅ Geriausias modelis: n_estimators={grid_search.best_params_['n_estimators']}")
-
-    # 6. Modelio įvertinimas
-    y_pred = model.predict(X_test)
-    mae = mean_absolute_error(y_test, y_pred)
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))  # Naudojame np.sqrt dėl senesnės sklearn versijos
-    r2 = r2_score(y_test, y_pred)
-
-    print("\n📊 Modelio rezultatai (testiniame rinkinyje):")
-    print(f"MAE (Vid. absoliutinė paklaida): {mae:.2f}")
-    print(f"RMSE (Kvadratinė vid. paklaida): {rmse:.2f}")
-    print(f"R2 (determinacijos koeficientas): {r2:.2f}")
-
-    # 7. Požymių svarbos vizualizacija
-    importances = model.feature_importances_
-    feature_importance = pd.DataFrame({
-        "Feature": feature_names,
-        "Importance": importances
-    }).sort_values(by="Importance", ascending=False)
-
-    top_features = feature_importance.head(10)
-    plt.figure(figsize=(10, 6))
-    plt.barh(top_features["Feature"], top_features["Importance"], edgecolor='black')
-    plt.gca().invert_yaxis()
-    plt.xlabel("Svarba (feature importance)")
-    plt.title("📊 Top 10 požymių pagal įtaką vietos prognozei")
     plt.tight_layout()
     plt.show()
 
-    # 8. GridSearch rezultatai
-    results = pd.DataFrame(grid_search.cv_results_)
-    plt.figure(figsize=(10, 6))
-    plt.plot(results['param_n_estimators'], -results['mean_test_score'], marker='o')
-    plt.xlabel("n_estimators")
-    plt.ylabel("Vidutinis MAE (5-fold CV)")
-    plt.title("MAE priklausomybė nuo n_estimators")
+def show_error_percentiles(y_true, y_pred):
+    errors = np.abs(np.array(y_true) - np.array(y_pred))
+    percentiles = [50, 75, 90, 95]
+    print("\n📈 Klaidų paskirstymo percentiliai:")
+    for p in percentiles:
+        print(f"{p}%% klaida < {np.percentile(errors, p):.2f} vietų")
+
+    # Papildoma vizualizacija
+    plt.figure(figsize=(8, 5))
+    sns.histplot(errors, bins=30, kde=True, color="skyblue")
+    plt.title("Prognozės klaidų pasiskirstymas")
+    plt.xlabel("Absoliuti klaida (vietų skirtumas)")
+    plt.ylabel("Sportininkių skaičius")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
-    # 9. Paklaidų (error) histograma
-    errors = y_pred - y_test
-    plt.figure(figsize=(8, 6))
-    plt.hist(errors, bins=30, edgecolor='black', alpha=0.7)
-    plt.axvline(0, color='red', linestyle='--', linewidth=2)
-    plt.xlabel("Paklaida (prognozė - tikroji reikšmė)")
-    plt.ylabel("Stebėjimų skaičius")
-    plt.title("Modelio paklaidų histograma")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+def predict_place_rf(data_path, target_column, output_dir="data/"):
+    df = pd.read_csv(data_path)
+    comp_cols = sorted([c for c in df.columns if c.startswith("202")], key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
+    static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
 
-    # 10. Išsaugo modelį
+    train_date, val_date = "2024-12-22", "2025-01-25"
+    train_cols = [c for c in comp_cols if datetime.strptime(c.split()[0], "%Y-%m-%d") <= datetime.strptime(train_date, "%Y-%m-%d")]
+    val_cols = [c for c in comp_cols if train_date < c.split()[0] <= val_date]
+    test_cols = [c for c in comp_cols if c.split()[0] > val_date]
+
+    X_train = df[static_feats + train_cols].fillna(0)
+    y_train = df[val_cols[0]].copy()
+    y_train = y_train[y_train.notna()]
+    X_train = X_train.loc[y_train.index]
+
+    grid = GridSearchCV(RandomForestRegressor(random_state=42), {'n_estimators': range(50, 251, 50)}, scoring='neg_mean_squared_error', cv=3, n_jobs=-1)
+    grid.fit(X_train, y_train)
+    best_model = grid.best_estimator_
+
+    print(f"\n✅ Geriausias modelis: {grid.best_params_} su MSE={-grid.best_score_:.4f}")
+    print("\n📊 Validacijos rezultatai:")
+    evaluate_regression_phase(df, best_model, X_train, val_cols, "Val")
+
+    X_final = df[static_feats + train_cols].fillna(0)
+    y_final = df[test_cols[0]].copy()
+    y_final = y_final[y_final.notna()]
+    X_final = X_final.loc[y_final.index]
+
+    final_model = RandomForestRegressor(n_estimators=grid.best_params_['n_estimators'], random_state=42)
+    final_model.fit(X_final, y_final)
+
+    print("\n📋 Testavimo rezultatai:")
+    test_stats, y_true_all, y_pred_all = evaluate_regression_phase(df, final_model, X_final, test_cols, "Test")
+
+    dates = [datetime.strptime(s['Etapas'].split()[0], "%Y-%m-%d") for s in test_stats]
+    plot_all_metrics(dates, [s["MAE"] for s in test_stats], [s["RMSE"] for s in test_stats], [s["MedAE"] for s in test_stats])
+
+    print("\n📊 Bendri testavimo rezultatai visiems etapams:")
+    print(f"Bendras MAE: {mean_absolute_error(y_true_all, y_pred_all):.3f}")
+    print(f"Bendras RMSE: {mean_squared_error(y_true_all, y_pred_all) ** 0.5:.3f}")
+    print(f"Bendras MedAE: {median_absolute_error(y_true_all, y_pred_all):.3f}")
+
+    show_error_percentiles(y_true_all, y_pred_all)
+
     os.makedirs(output_dir, exist_ok=True)
-    model_filename = f"regression_place_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
-    model_path = os.path.join(output_dir, model_filename)
-    joblib.dump((model, feature_names), model_path)
+    model_path = os.path.join(output_dir, f"rf_place_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
+    joblib.dump((final_model, list(X_final.columns)), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 
 if __name__ == "__main__":
-    predict_place_with_participation(
-        cleaned_data_path="data/female_athletes_cleaned_final.csv",
-        binary_data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2025-02-23 07 (12.5  Mass Start Competition) W",
-        output_dir="data/"
+    predict_place_rf(
+        data_path="data/female_athletes_cleaned_final.csv",
+        target_column="2025-12-02 01 (15  Individual Competition) W"
     )
