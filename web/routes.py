@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
-from web.web_actions import get_past_events
+from web.web_actions import get_past_events, predict_next_event
 from models.RandomForest.predict_place import predict_place_with_participation
 from models.RandomForest.predict_participation import predict_participation
 from operations.data.loader import load_data
 import pandas as pd
 import os
+
 
 CLEANED_CSV = "data/female_athletes_cleaned_final.csv"
 BINARY_CSV = "data/female_athletes_binary_competitions.csv"
@@ -12,7 +13,6 @@ DATA_FILE = os.path.join('data', 'female_athletes_2425_full_stats_with_ranks.csv
 
 web_bp = Blueprint('web', __name__)
 
-web_bp = Blueprint('web', __name__)
 
 @web_bp.route('/')
 def index():
@@ -95,3 +95,31 @@ def predict():
     except Exception as e:
         flash(f"Klaida prognozuojant: {str(e)}", "error")
         return redirect(url_for("web.index"))
+    
+@web_bp.route('/predict_next', methods=['POST'])
+def predict_next():
+    model_name = request.form.get('model')
+    event_type = request.form.get('event_type')
+
+    # (You can enforce support here if you like)
+    if model_name not in ("random_forest", "xgboost", "lstm"):
+        flash(f"Modelis '{model_name}' nepalaikomas.", "error")
+        return redirect(url_for('web.index'))
+
+    try:
+        # Call your stub (or real) predictor
+        results = predict_next_event(event_type, model_name)
+
+        # Render a simple “next_result.html” table
+        return render_template(
+            'next_result.html',
+            results=results,
+            model=model_name,
+            event_type=event_type
+        )
+    except Exception as e:
+        flash(f"Klaida prognozuojant: {e}", "error")
+        return redirect(url_for('web.index'))
+
+
+

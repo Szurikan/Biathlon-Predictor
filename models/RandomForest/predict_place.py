@@ -132,6 +132,8 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
     joblib.dump((final_model, list(X_final.columns)), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 
+predict_place_with_participation = predict_place_rf
+
 if __name__ == "__main__":
     predict_place_rf(
         data_path="data/female_athletes_cleaned_final.csv",

@@ -1,45 +1,38 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="lt">
-<head>
+  <head>
     <meta charset="UTF-8">
     <title>Biatlono Prognozė</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
+  </head>
+  <body>
     <h1>Biatlono rezultatų prognozė</h1>
-
-    <!-- Flash pranešimai -->
     {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash {{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
     {% endwith %}
-
     <hr>
 
-    <!-- Prognozė pagal pasirinkto tipo būsimą etapą -->
     <h2>1. Sekančio etapo prognozė pagal tipą</h2>
-    <form method="post" action="/predict_next">
-        <label for="model">Pasirinkite modelį:</label><br>
-        <select name="model" id="model" required>
-            <option value="random_forest">Random Forest</option>
-        </select><br><br>
+    <form method="post" action="{{ url_for('web.predict_next') }}">
+      <label for="model">Pasirinkite modelį:</label><br>
+      <select name="model" id="model" required>
+        <option value="random_forest">Random Forest</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="lstm">LSTM</option>
+      </select><br><br>
 
-        <label for="event_type">Pasirinkite etapo tipą:</label><br>
-        <select name="event_type" id="event_type" required>
-            <option value="Sprint">Sprint</option>
-            <option value="Pursuit">Pursuit</option>
-            <option value="Individual">Individual</option>
-            <option value="Mass Start">Mass Start</option>
-        </select><br><br>
+      <label for="event_type">Pasirinkite etapo tipą:</label><br>
+      <select name="event_type" id="event_type" required>
+        <option value="Sprint">Sprint</option>
+        <option value="Pursuit">Pursuit</option>
+        <option value="Individual">Individual</option>
+        <option value="Mass Start">Mass Start</option>
+      </select><br><br>
 
-        <input type="submit" value="Prognozuoti">
+      <input type="submit" value="Prognozuoti">
     </form>
-
-    <form action="/update" method="get">
-        <button type="submit">Atnaujinti duomenis</button>
-    </form>
-</body>
+  </body>
 </html>
