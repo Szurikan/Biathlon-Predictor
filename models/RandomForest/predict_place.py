@@ -128,7 +128,12 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
     show_error_percentiles(y_true_all, y_pred_all)
 
     os.makedirs(output_dir, exist_ok=True)
-    model_path = os.path.join(output_dir, f"rf_place_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.pkl")
+    event_type = "Sprint" if "Sprint" in target_column else \
+                "Pursuit" if "Pursuit" in target_column else \
+                "Individual" if "Individual" in target_column else \
+                "MassStart" if "Mass Start" in target_column else "Unknown"
+
+    model_path = os.path.join(output_dir, f"{event_type}_RandomForest_Next.pkl")
     joblib.dump((final_model, list(X_final.columns)), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 

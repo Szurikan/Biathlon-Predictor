@@ -6,6 +6,7 @@ from sklearn.ensemble import RandomForestRegressor
 # Remove caching/persistence to ensure fresh training
 from operations.data.loader import load_data
 from config.config import TOP_PREDICTIONS_COUNT
+import joblib
 
 # Paths
 DATA_FILE = os.path.join('data', 'female_athletes_cleaned_final.csv')
@@ -44,6 +45,12 @@ def _train_rf(event_type, df, races, static_feats):
     rf.fit(X_train, y_train)
     return rf
 
+def load_existing_model(model_path):
+    if os.path.exists(model_path):
+        model, columns = joblib.load(model_path)
+        return model, columns
+    return None, None
+
 
 def predict_next_event(event_type, model_name):
     """
@@ -71,24 +78,29 @@ def predict_next_event(event_type, model_name):
         races = sorted(event_cols, key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
 
         if model_name == 'random_forest':
-            # Need at least two historic events to train
-            if len(races) < 2:
+            # Pasiruošiam duomenis
+            if len(races) < 1:
+                return []
+            event_map = {
+                "Sprint": "Sprint",
+                "Pursuit": "Pursuit",
+                "Individual": "Individual",
+                "Mass Start": "MassStart"
+            }
+            event_key = event_map.get(event_type, "Unknown")
+            model_filename = f"{event_key}_RandomForest_Next.pkl"
+
+            model_path = os.path.join("data", model_filename)
+
+            model, columns = load_existing_model(model_path)
+            if model is None:
+                print(f"❌ Modelio failas nerastas: {model_path}")
                 return []
 
-            # Static features: numeric, excluding races, IDs, name, and nation columns
-            exclude = set(races + ['IBUId', 'FullName'] + nation_cols)
-            static_feats = [c for c in df.columns if c not in exclude and is_numeric_dtype(df[c])]
+            # Paimti X_pred pagal įkeltus stulpelius
+            X_pred = df[columns].fillna(0)
 
-            # Train a fresh model
-            rf = _train_rf(event_type, df, races, static_feats)
-            if rf is None:
-                return []
-
-            # Prepare prediction features for last event
-            last_col = races[-1]
-            X_pred = df[static_feats + [last_col]].fillna(0).rename(columns={last_col: 'last_time'})
-
-            preds = rf.predict(X_pred)
+            preds = model.predict(X_pred)
             df['predicted_time'] = preds
 
             # Sort and pick top
