@@ -118,10 +118,17 @@ def predict_place_lstm(data_path, target_column, output_dir="data/"):
 
     show_error_percentiles(y_val, y_pred)
 
+    event_type = "Sprint" if "Sprint" in target_column else \
+                "Pursuit" if "Pursuit" in target_column else \
+                "Individual" if "Individual" in target_column else \
+                "MassStart" if "Mass Start" in target_column else "Unknown"
+
     os.makedirs(output_dir, exist_ok=True)
-    model_path = os.path.join(output_dir, f"lstm_place_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}_optuna.h5")
+    model_path = os.path.join(output_dir, f"{event_type}_LSTM_Next.h5")
     final_model.save(model_path)
     print(f"\nModelis išsaugotas: {model_path}")
+
+predict_place_with_participation = predict_place_lstm
 
 if __name__ == "__main__":
     predict_place_lstm(

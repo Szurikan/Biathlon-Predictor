@@ -137,8 +137,13 @@ def predict_participation_lstm(data_path, target_column, output_dir="data/"):
     print(f"FN: {cm_total[1][0]}, TP: {cm_total[1][1]}")
 
     os.makedirs(output_dir, exist_ok=True)
-    model_path = os.path.join(output_dir, f"lstm_model_{target_column.replace(' ', '_').replace('(', '').replace(')', '')}.keras")
-    final_model.save(model_path)
+    event_type = "Sprint" if "Sprint" in target_column else \
+                "Pursuit" if "Pursuit" in target_column else \
+                "Individual" if "Individual" in target_column else \
+                "MassStart" if "Mass Start" in target_column else "Unknown"
+
+    model_path = os.path.join(output_dir, f"{event_type}_Participation_lstm_Next.keras")
+    joblib.dump((final_model, None), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 
 if __name__ == "__main__":
