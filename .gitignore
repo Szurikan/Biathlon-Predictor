@@ -189,3 +189,4 @@ data/Mano Duomenys/Etapu rezultatai.docx
 *.h5
 *.keras
 *.docx
+*.joblib

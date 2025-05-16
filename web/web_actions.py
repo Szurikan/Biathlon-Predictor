@@ -1,46 +1,141 @@
 import os
+import pandas as pd
+from pandas.api.types import is_numeric_dtype
+from datetime import datetime
+from sklearn.ensemble import RandomForestRegressor
+# Remove caching/persistence to ensure fresh training
 from operations.data.loader import load_data
 from config.config import TOP_PREDICTIONS_COUNT
 
-DATA_FILE = os.path.join('data', 'female_athletes_2425_full_stats_with_ranks.csv')
+# Paths
+DATA_FILE = os.path.join('data', 'female_athletes_cleaned_final.csv')
+
+# No persistence directory used: always train fresh
 
 def get_past_events():
-    """Gražina įvykusių etapų sąrašą iš duomenų failo."""
+    """Gražina įvykusių etapų sąrašą chronologiškai."""
     try:
-        # Naudojame load_data vietoj tiesioginio skaitymo
         df = load_data(DATA_FILE)
-        
-        # Filtruojame stulpelius, kurie yra varžybų rezultatai (formato "YYYY MM (Discipline) W")
-        race_cols = [col for col in df.columns if "(" in col and ")" in col]
-        # Rūšiuojame chronologiškai
-        sorted_race_cols = sorted(race_cols, key=lambda x: (int(x[:4]), int(x[5:7])))
-        return sorted_race_cols
+        race_cols = [col for col in df.columns if '(' in col and ')' in col]
+        return sorted(race_cols, key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
     except Exception as e:
-        print(f"Klaida gaunant praėjusius etapus: {str(e)}")
+        print(f"Klaida gaunant praėjusius etapus: {e}")
         return []
-    
-def predict_next_event(event, model_name):
+
+
+def _train_rf(event_type, df, races, static_feats):
+    """Train RF on pairs of historic same-type event results and return the model."""
+    X_list, y_list = [], []
+    for i in range(len(races) - 1):
+        prev_col, next_col = races[i], races[i+1]
+        X = df[static_feats + [prev_col]].fillna(0).rename(columns={prev_col: 'last_time'})
+        y = pd.to_numeric(df[next_col], errors='coerce')
+        mask = y.notna()
+        X_list.append(X[mask])
+        y_list.append(y[mask])
+
+    if not X_list:
+        return None
+
+    X_train = pd.concat(X_list, ignore_index=True)
+    y_train = pd.concat(y_list, ignore_index=True)
+
+    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf.fit(X_train, y_train)
+    return rf
+
+
+def predict_next_event(event_type, model_name):
     """
-    Prognozuoja konkretaus etapo rezultatus pagal modelį.
+    Prognozuoja ateities rezultatus pagal modelį ir etapo tipą.
+
+    :param event_type: "Sprint", "Pursuit", "Individual", arba "Mass Start"
+    :param model_name: "random_forest" | "xgboost" | "lstm"
+    :returns: list of dict su laukais rank, name, nation, predicted
     """
     try:
         df = load_data(DATA_FILE)
 
-        names = df["FullName"]
-        nations = df["Nation"]
+        # Convert percent strings to numeric
+        for col in df.columns:
+            if df[col].dtype == object:
+                s = df[col].dropna().astype(str)
+                if not s.empty and s.str.endswith('%').all():
+                    df[col] = s.str.rstrip('%').astype(float)
 
-        # Tiesiog imitacija – čia turėtų būti realus modelio naudojimas
-        sorted_df = df.sort_values(by=event).dropna(subset=[event])
-        top_athletes = []
-        for i, (_, row) in enumerate(sorted_df.head(TOP_PREDICTIONS_COUNT).iterrows()):
-            top_athletes.append({
-                "rank": i + 1,
-                "name": row["FullName"],
-                "nation": row["Nation"],
-                "predicted": f"{i+1} vieta"
-            })
+        # Identify nation one-hot columns
+        nation_cols = [c for c in df.columns if c.startswith('Nation_')]
 
-        return top_athletes
+        # Identify same-type historic events
+        event_cols = [c for c in df.columns if c.startswith('202') and event_type.lower() in c.lower()]
+        races = sorted(event_cols, key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
+
+        if model_name == 'random_forest':
+            # Need at least two historic events to train
+            if len(races) < 2:
+                return []
+
+            # Static features: numeric, excluding races, IDs, name, and nation columns
+            exclude = set(races + ['IBUId', 'FullName'] + nation_cols)
+            static_feats = [c for c in df.columns if c not in exclude and is_numeric_dtype(df[c])]
+
+            # Train a fresh model
+            rf = _train_rf(event_type, df, races, static_feats)
+            if rf is None:
+                return []
+
+            # Prepare prediction features for last event
+            last_col = races[-1]
+            X_pred = df[static_feats + [last_col]].fillna(0).rename(columns={last_col: 'last_time'})
+
+            preds = rf.predict(X_pred)
+            df['predicted_time'] = preds
+
+            # Sort and pick top
+            df_sorted = df.sort_values('predicted_time')
+            top = df_sorted.head(TOP_PREDICTIONS_COUNT)
+
+            # Build results with nation detection
+            results = []
+            for idx, (_, row) in enumerate(top.iterrows()):
+                nation = None
+                for col in nation_cols:
+                    if row.get(col, 0) == 1:
+                        nation = col.split('_', 1)[1]
+                        break
+                results.append({
+                    'rank': idx + 1,
+                    'name': row['FullName'],
+                    'nation': nation,
+                    'predicted': f"{idx + 1} vieta"
+                })
+            return results
+
+        elif model_name in ('xgboost', 'lstm'):
+            # Simple stub: sort by last event time
+            if not races:
+                return []
+            last_col = races[-1]
+            clean = df.dropna(subset=[last_col]).sort_values(last_col)
+            results = []
+            for idx, (_, row) in enumerate(clean.head(TOP_PREDICTIONS_COUNT).iterrows()):
+                nation = None
+                for col in nation_cols:
+                    if row.get(col, 0) == 1:
+                        nation = col.split('_', 1)[1]
+                        break
+                results.append({
+                    'rank': idx + 1,
+                    'name': row['FullName'],
+                    'nation': nation,
+                    'predicted': f"{idx + 1} vieta"
+                })
+            return results
+
+        else:
+            # Unsupported model
+            return []
+
     except Exception as e:
-        print(f"Klaida prognozuojant etapą: {str(e)}")
+        print(f"Klaida prognozuojant etapą: {e}")
         return []
