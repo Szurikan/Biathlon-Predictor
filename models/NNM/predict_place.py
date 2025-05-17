@@ -8,9 +8,13 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.callbacks import EarlyStopping
 from visualizations.visualizations import save_place_metrics, save_error_distribution
+import sqlite3
 
 def predict_place_lstm(data_path, target_column, output_dir="data/"):
-    df = pd.read_csv(data_path)
+    # df = pd.read_csv(data_path)
+    conn = sqlite3.connect(data_path)
+    df = pd.read_sql_query("SELECT * FROM cleaned_data", conn)
+    conn.close()
     comp_cols = sorted([c for c in df.columns if c.startswith("202")], key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
     static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
 
@@ -157,14 +161,8 @@ def predict_place_lstm(data_path, target_column, output_dir="data/"):
     else:
         print("\n⚠️ Nepavyko atlikti testavimo - nėra tinkamų testavimo duomenų.")
     
-    # Modelio išsaugojimas
-    os.makedirs(output_dir, exist_ok=True)
-    event_type = "Sprint" if "Sprint" in target_column else \
-                "Pursuit" if "Pursuit" in target_column else \
-                "Individual" if "Individual" in target_column else \
-                "MassStart" if "Mass Start" in target_column else "Unknown"
     
-    model_path = os.path.join(output_dir, f"{event_type}_LSTM_Improved_Next.keras")
+    model_path = os.path.join(output_dir, f"next_event_place_LSTM.keras")
     model.save(model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 
@@ -172,6 +170,6 @@ predict_place_with_participation = predict_place_lstm
 
 if __name__ == "__main__":
     predict_place_lstm(
-        data_path="data/female_athletes_cleaned_final.csv",
+        data_path="data/athletes_data.db",
         target_column="2025-12-02 01 (15  Individual Competition) W"
     )

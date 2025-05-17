@@ -9,6 +9,7 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score,
     f1_score, confusion_matrix, classification_report
 )
+import sqlite3
 
 from visualizations.visualizations import (
     save_metric_plots, save_accuracy_plot, save_confusion_matrix
@@ -71,7 +72,11 @@ def evaluate_phase(df, model, X, columns, phase):
     return all_y_true, all_y_pred, stats_list
 
 def predict_participation(data_path, target_column, output_dir="data/"):
-    df = pd.read_csv(data_path)
+    # df = pd.read_csv(data_path)
+    conn = sqlite3.connect(data_path)
+    df = pd.read_sql_query("SELECT * FROM binary_data", conn)
+    conn.close()
+
     comp_cols = sorted([c for c in df.columns if c.startswith("202")], key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
     static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
 
@@ -113,18 +118,12 @@ def predict_participation(data_path, target_column, output_dir="data/"):
     print(f"TN: {cm_total[0][0]}, FP: {cm_total[0][1]}")
     print(f"FN: {cm_total[1][0]}, TP: {cm_total[1][1]}")
 
-    os.makedirs(output_dir, exist_ok=True)
-    event_type = "Sprint" if "Sprint" in target_column else \
-                 "Pursuit" if "Pursuit" in target_column else \
-                 "Individual" if "Individual" in target_column else \
-                 "MassStart" if "Mass Start" in target_column else "Unknown"
 
-    model_path = os.path.join(output_dir, f"{event_type}_Participation_RandomForest_Next.pkl")
+    model_path = os.path.join(output_dir, f"next_event_Participation_RandomForest.pkl")
     joblib.dump((final_model, list(X_final.columns)), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 
 if __name__ == "__main__":
-    predict_participation(
-        data_path="data/female_athletes_binary_competitions.csv",
-        target_column="2025-12-02 01 (15  Individual Competition) W"
-    )
+    predict_participation(data_path="data/athletes_data.db", 
+                          target_column="Participated"
+                          )

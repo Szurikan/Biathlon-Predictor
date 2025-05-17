@@ -1,13 +1,10 @@
 import pandas as pd
+import sqlite3
 
 def load_and_clean_columns(input_path):
     df = pd.read_csv(input_path)
-
-    # Pašalinti stulpelius, kurių pavadinimai baigiasi " M"
     columns_to_drop = [col for col in df.columns if col.strip().endswith("M")]
     df = df.drop(columns=columns_to_drop)
-
-    # Pašalinti stulpelius, kuriuose visos reikšmės yra NaN arba tuščios eilutės
     df = df.dropna(axis=1, how='all')
     df = df.loc[:, ~(df == '').all()]
     return df
@@ -23,7 +20,6 @@ def fill_group_means(df, column_groups):
         group_cols = [col for col in group if col in df.columns]
         if not group_cols:
             continue
-
         for col in group_cols:
             df[col] = (
                 df[col].astype(str)
@@ -32,7 +28,6 @@ def fill_group_means(df, column_groups):
                 .str.strip()
             )
             df[col] = pd.to_numeric(df[col], errors='coerce')
-
         row_mean = df[group_cols].mean(axis=1)
         for col in group_cols:
             df[col] = df[col].fillna(row_mean)
@@ -79,3 +74,11 @@ def encode_competition_participation(df, binary_output_path):
     df_binary[competition_columns] = df_binary[competition_columns].notna().astype(int)
     df_binary.to_csv(binary_output_path, index=False)
     print(f"Failas su užkoduotais varžybų duomenimis išsaugotas kaip: {binary_output_path}")
+    return df_binary
+
+def save_to_database(df_cleaned, df_binary, db_path="data/athletes_data.db"):
+    conn = sqlite3.connect(db_path)
+    df_cleaned.to_sql("cleaned_data", conn, if_exists="replace", index=False)
+    df_binary.to_sql("binary_data", conn, if_exists="replace", index=False)
+    conn.close()
+    print(f"Duomenys išsaugoti SQLite duomenų bazėje: {db_path}")

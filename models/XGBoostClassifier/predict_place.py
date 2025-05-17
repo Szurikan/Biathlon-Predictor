@@ -9,6 +9,7 @@ from xgboost import XGBRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error
 from visualizations.visualizations import save_place_metrics, save_error_distribution
+import sqlite3
 
 def evaluate_regression_phase(df, model, X, columns, phase):
     all_true, all_pred = [], []
@@ -41,7 +42,10 @@ def evaluate_regression_phase(df, model, X, columns, phase):
     return stats_list, all_true, all_pred
 
 def predict_place_xgb(data_path, target_column, output_dir="data/"):
-    df = pd.read_csv(data_path)
+    # df = pd.read_csv(data_path)
+    conn = sqlite3.connect(data_path)
+    df = pd.read_sql_query("SELECT * FROM cleaned_data", conn)
+    conn.close()
     comp_cols = sorted([c for c in df.columns if c.startswith("202")], key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
     static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
 
@@ -99,13 +103,7 @@ def predict_place_xgb(data_path, target_column, output_dir="data/"):
     print(f"Bendras RMSE: {mean_squared_error(y_true_all, y_pred_all) ** 0.5:.3f}")
     print(f"Bendras MedAE: {median_absolute_error(y_true_all, y_pred_all):.3f}")
 
-    os.makedirs(output_dir, exist_ok=True)
-    event_type = "Sprint" if "Sprint" in target_column else \
-                 "Pursuit" if "Pursuit" in target_column else \
-                 "Individual" if "Individual" in target_column else \
-                 "MassStart" if "Mass Start" in target_column else "Unknown"
-
-    model_path = os.path.join(output_dir, f"{event_type}_XGBoost_Next.pkl")
+    model_path = os.path.join(output_dir, f"next_event_Place_XGBoost.pkl")
     joblib.dump((final_model, list(X_final.columns)), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 
@@ -113,6 +111,6 @@ predict_place_with_participation = predict_place_xgb
 
 if __name__ == "__main__":
     predict_place_xgb(
-        data_path="data/female_athletes_cleaned_final.csv",
+        data_path="data/athletes_data.db",
         target_column="2025-12-02 01 (15  Individual Competition) W"
     )

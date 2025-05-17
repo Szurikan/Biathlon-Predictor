@@ -6,13 +6,15 @@ from operations.data.preprocessing import (
     final_cleaning_and_encoding,
     save_cleaned_data,
     encode_competition_participation,
-    fill_missing_with_personal_average
+    fill_missing_with_personal_average,
+    save_to_database
 )
 
 def main():
     input_path = "data/female_athletes_2425_full_stats_with_ranks.csv"
     output_path = "data/female_athletes_cleaned_final.csv"
     binary_output = "data/female_athletes_binary_competitions.csv"
+    db_path = "data/athletes_data.db"
 
     column_groups = [
         ['StatShooting_24_25', 'StatShooting_23_24', 'StatShooting_22_23', 'StatShooting_21_22'],
@@ -26,13 +28,11 @@ def main():
     df = remove_empty_rows(df, column_groups)
     df = fill_group_means(df, column_groups)
     df = final_cleaning_and_encoding(df)
-    encode_competition_participation(df, binary_output)
+    df_binary = encode_competition_participation(df, binary_output)
     df = fill_result_columns(df, last_group_col='SkiKMB_21_22')
     df = fill_missing_with_personal_average(df)
     save_cleaned_data(df, output_path)
-   
-    
-
+    save_to_database(df, df_binary, db_path)
 
 if __name__ == "__main__":
     main()

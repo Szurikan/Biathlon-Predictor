@@ -1,11 +1,12 @@
 import pandas as pd
+import sqlite3
 
 # Random Forest
 from models.RandomForest.predict_participation import predict_participation as rf_participation
 from models.RandomForest.predict_place import predict_place_with_participation as rf_place
 
 # XGBoost
-from models.XGBoostClassifier.predict_participation import predict_participation_xgb as xgb_participation
+from models.XGBoostClassifier.predict_participation import predict_participation as xgb_participation
 from models.XGBoostClassifier.predict_place import predict_place_with_participation as xgb_place
 
 # LSTM
@@ -13,15 +14,19 @@ from models.NNM.predict_participation import predict_participation_lstm as lstm_
 from models.NNM.predict_place import predict_place_with_participation as lstm_place
 
 # Keliai
-BINARY_CSV = "data/female_athletes_binary_competitions.csv"
-CLEANED_CSV = "data/female_athletes_cleaned_final.csv"
+BINARY_DB = "data/athletes_data.db"
+CLEANED_DB = "data/athletes_data.db"
 EVENT_TYPES = ["Mass Start"] 
  #              "Individual", 
   #             "Pursuit", 
    #            "Sprint"]
 
 def train_all_events():
-    df = pd.read_csv(BINARY_CSV)
+    # df = pd.read_csv(BINARY_DB)
+
+    conn = sqlite3.connect(BINARY_DB)
+    df = pd.read_sql_query("SELECT * FROM binary_data", conn)
+    conn.close()
     competition_columns = [col for col in df.columns if col.startswith("202")]
 
     for event_type in EVENT_TYPES:
@@ -41,13 +46,13 @@ def train_all_events():
         print("🌲 Random Forest:")
         print("🔄 Dalyvavimo prognozė...")
         rf_participation(
-            data_path=BINARY_CSV,
+            data_path=BINARY_DB,
             target_column=latest_col,
             output_dir="data"
         )
         print("🎯 Vietos prognozė...")
         rf_place(
-            data_path=CLEANED_CSV,
+            data_path=CLEANED_DB,
             target_column=latest_col,
             output_dir="data"
         )
@@ -58,13 +63,13 @@ def train_all_events():
         print("⚡ XGBoost:")
         print("🔄 Dalyvavimo prognozė...")
         xgb_participation(
-            data_path=BINARY_CSV,
+            data_path=BINARY_DB,
             target_column=latest_col,
             output_dir="data"
         )
         print("🎯 Vietos prognozė...")
         xgb_place(
-            data_path=CLEANED_CSV,
+            data_path=CLEANED_DB,
             target_column=latest_col,
             output_dir="data"
         )
@@ -75,13 +80,13 @@ def train_all_events():
         print("🧠 LSTM:")
         print("🔄 Dalyvavimo prognozė...")
         lstm_participation(
-            data_path=BINARY_CSV,
+            data_path=BINARY_DB,
             target_column=latest_col,
             output_dir="data"
         )
         print("🎯 Vietos prognozė...")
         lstm_place(
-            data_path=CLEANED_CSV,
+            data_path=CLEANED_DB,
             target_column=latest_col,
             output_dir="data"
         )

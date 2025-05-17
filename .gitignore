@@ -191,3 +191,4 @@ data/Mano Duomenys/Etapu rezultatai.docx
 *.docx
 *.joblib
 *.png
+*.db

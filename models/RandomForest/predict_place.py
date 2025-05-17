@@ -2,11 +2,14 @@ import pandas as pd
 import numpy as np
 import os
 import joblib
+import sqlite3
 from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error
+
 from visualizations.visualizations import save_place_metrics, save_error_distribution
+
 
 def evaluate_regression_phase(df, model, X, columns, phase):
     all_true, all_pred = [], []
@@ -38,9 +41,16 @@ def evaluate_regression_phase(df, model, X, columns, phase):
 
     return stats_list, all_true, all_pred
 
+
 def predict_place_rf(data_path, target_column, output_dir="data/"):
-    df = pd.read_csv(data_path)
-    comp_cols = sorted([c for c in df.columns if c.startswith("202")], key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
+    conn = sqlite3.connect(data_path)
+    df = pd.read_sql_query("SELECT * FROM cleaned_data", conn)
+    conn.close()
+
+    comp_cols = sorted(
+        [c for c in df.columns if c.startswith("202")],
+        key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d")
+    )
     static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
 
     train_date, val_date = "2024-12-22", "2025-01-25"
@@ -53,7 +63,8 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
     y_train = y_train[y_train.notna()]
     X_train = X_train.loc[y_train.index]
 
-    grid = GridSearchCV(RandomForestRegressor(random_state=42), {'n_estimators': range(50, 251, 50)}, scoring='neg_mean_squared_error', cv=3, n_jobs=-1)
+    grid = GridSearchCV(RandomForestRegressor(random_state=42), {'n_estimators': range(50, 251, 50)},
+                        scoring='neg_mean_squared_error', cv=3, n_jobs=-1)
     grid.fit(X_train, y_train)
     best_model = grid.best_estimator_
 
@@ -94,14 +105,15 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
                 "Individual" if "Individual" in target_column else \
                 "MassStart" if "Mass Start" in target_column else "Unknown"
 
-    model_path = os.path.join(output_dir, f"{event_type}_RandomForest_Next.pkl")
+    model_path = os.path.join(output_dir, f"next_event_Place_RandomForest.pkl")
     joblib.dump((final_model, list(X_final.columns)), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
+
 
 predict_place_with_participation = predict_place_rf
 
 if __name__ == "__main__":
     predict_place_rf(
-        data_path="data/female_athletes_cleaned_final.csv",
+        data_path="data/athletes_data.db",
         target_column="2025-12-02 01 (15  Individual Competition) W"
     )
