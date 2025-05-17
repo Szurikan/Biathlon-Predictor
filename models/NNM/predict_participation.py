@@ -3,14 +3,15 @@ import numpy as np
 import os
 import joblib
 from datetime import datetime
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Sequential # type: ignore
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input # type: ignore
 from tensorflow.keras.callbacks import EarlyStopping # type: ignore
 from tensorflow.keras.losses import MeanSquaredError # type: ignore
+from visualizations.visualizations import (
+    save_metric_plots, save_accuracy_plot, save_confusion_matrix
+)
 
 def adjust_predictions_by_format(pred_scores, competition_name):
     if "Mass Start" in competition_name:
@@ -102,34 +103,12 @@ def predict_participation_lstm(data_path, target_column, output_dir="data/"):
 
     # Vizualizacijos
     dates = [datetime.strptime(s['Etapas'].split()[0], "%Y-%m-%d") for s in stats_list]
-    plt.figure(figsize=(12, 10))
-    for i, (metric, label) in enumerate(zip(['accuracy', 'precision_1', 'recall_1', 'f1_1'], ['Accuracy', 'Precision', 'Recall', 'F1-score'])):
-        plt.subplot(2, 2, i+1)
-        plt.plot(dates, [s[metric] for s in stats_list], 'o-')
-        plt.title(f"{label} pagal etapą")
-        plt.xlabel("Data")
-        plt.ylabel(label)
-        plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-    plt.figure(figsize=(8, 5))
-    plt.plot(dates, [s['accuracy'] for s in stats_list], 'o-')
-    plt.title("Bendras tikslumas pagal laiką")
-    plt.xlabel("Data")
-    plt.ylabel("Accuracy")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
+    viz_dir = os.path.join("data", "visualizations")
+    prefix = "LSTM"
+    save_metric_plots(dates, stats_list, viz_dir, prefix)
+    save_accuracy_plot(dates, stats_list, viz_dir, prefix)
     cm_total = confusion_matrix(all_y_true, all_y_pred)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm_total, annot=True, fmt='d', cmap='Blues', xticklabels=['Ne', 'Taip'], yticklabels=['Ne', 'Taip'])
-    plt.title("Bendra sujaukimo matrica (visi etapai)")
-    plt.xlabel("Prognozuota klasė")
-    plt.ylabel("Tikroji klasė")
-    plt.tight_layout()
-    plt.show()
+    save_confusion_matrix(cm_total, viz_dir, prefix)
 
     print("\n📊 Bendri testavimo rezultatai visiems etapams:")
     print(classification_report(all_y_true, all_y_pred, digits=2))
@@ -143,7 +122,7 @@ def predict_participation_lstm(data_path, target_column, output_dir="data/"):
                 "Individual" if "Individual" in target_column else \
                 "MassStart" if "Mass Start" in target_column else "Unknown"
 
-    model_path = os.path.join(output_dir, f"{event_type}_Participation_lstm_Next.keras")
+    model_path = os.path.join(output_dir, f"{event_type}_Participation_LSTM_Next.keras")
     joblib.dump((final_model, None), model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 

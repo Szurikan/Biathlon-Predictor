@@ -3,13 +3,15 @@ import numpy as np
 import os
 import joblib
 from datetime import datetime
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score,
     f1_score, confusion_matrix, classification_report
+)
+
+from visualizations.visualizations import (
+    save_metric_plots, save_accuracy_plot, save_confusion_matrix
 )
 
 def adjust_predictions_by_format(pred_scores, competition_name):
@@ -19,7 +21,6 @@ def adjust_predictions_by_format(pred_scores, competition_name):
         target_count = 60
     else:
         target_count = 100
-
     top_indices = np.argsort(pred_scores)[-target_count:]
     binary_selection = np.zeros_like(pred_scores, dtype=int)
     binary_selection[top_indices] = 1
@@ -69,13 +70,6 @@ def evaluate_phase(df, model, X, columns, phase):
         all_y_pred.extend(pred.tolist())
     return all_y_true, all_y_pred, stats_list
 
-def plot_metrics(dates, metrics, title, ylabel):
-    plt.plot(dates, metrics, 'o-')
-    plt.title(title)
-    plt.xlabel("Data")
-    plt.ylabel(ylabel)
-    plt.grid(True)
-
 def predict_participation(data_path, target_column, output_dir="data/"):
     df = pd.read_csv(data_path)
     comp_cols = sorted([c for c in df.columns if c.startswith("202")], key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
@@ -105,44 +99,25 @@ def predict_participation(data_path, target_column, output_dir="data/"):
     print("\n📋 Testavimo rezultatai:")
     y_true_all, y_pred_all, test_stats = evaluate_phase(df, final_model, X_final, test_cols, "Test")
 
-    # Vizualizacija
     dates = [datetime.strptime(s['Etapas'].split()[0], "%Y-%m-%d") for s in test_stats]
-    plt.figure(figsize=(12, 10))
-    for i, (metric, label) in enumerate(zip(['accuracy', 'precision_1', 'recall_1', 'f1_1'], ['Accuracy', 'Precision', 'Recall', 'F1-score'])):
-        plt.subplot(2, 2, i+1)
-        plot_metrics(dates, [s[metric] for s in test_stats], f"{label} pagal etapą", label)
-    plt.tight_layout()
-    plt.show()
-
-    # Papildomas grafikas: tikslumas per laiką
-    plt.figure(figsize=(8, 5))
-    plot_metrics(dates, [s['accuracy'] for s in test_stats], "Bendras tikslumas pagal laiką", "Accuracy")
-    plt.tight_layout()
-    plt.show()
-
-    # Bendra sujaukimo matrica (vizualizacija)
+    viz_dir = os.path.join("data", "visualizations")
+    prefix = "RandomForest"
+    save_metric_plots(dates, test_stats, viz_dir, prefix)
+    save_accuracy_plot(dates, test_stats, viz_dir, prefix)
     cm_total = confusion_matrix(y_true_all, y_pred_all)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm_total, annot=True, fmt='d', cmap='Blues', xticklabels=['Ne', 'Taip'], yticklabels=['Ne', 'Taip'])
-    plt.title("Bendra sujaukimo matrica (visi etapai)")
-    plt.xlabel("Prognozuota klasė")
-    plt.ylabel("Tikroji klasė")
-    plt.tight_layout()
-    plt.show()
+    save_confusion_matrix(cm_total, viz_dir, prefix)
 
-    # Bendri testavimo rezultatai (tekstiniai)
     print("\n📊 Bendri testavimo rezultatai visiems etapams:")
     print(classification_report(y_true_all, y_pred_all, digits=2))
     print("\nBendra sujaukimo matrica:")
     print(f"TN: {cm_total[0][0]}, FP: {cm_total[0][1]}")
     print(f"FN: {cm_total[1][0]}, TP: {cm_total[1][1]}")
 
-    # Išsaugojimas
     os.makedirs(output_dir, exist_ok=True)
     event_type = "Sprint" if "Sprint" in target_column else \
-                "Pursuit" if "Pursuit" in target_column else \
-                "Individual" if "Individual" in target_column else \
-                "MassStart" if "Mass Start" in target_column else "Unknown"
+                 "Pursuit" if "Pursuit" in target_column else \
+                 "Individual" if "Individual" in target_column else \
+                 "MassStart" if "Mass Start" in target_column else "Unknown"
 
     model_path = os.path.join(output_dir, f"{event_type}_Participation_RandomForest_Next.pkl")
     joblib.dump((final_model, list(X_final.columns)), model_path)

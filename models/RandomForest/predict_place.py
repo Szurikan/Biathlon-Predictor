@@ -3,11 +3,10 @@ import numpy as np
 import os
 import joblib
 from datetime import datetime
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error
+from visualizations.visualizations import save_place_metrics, save_error_distribution
 
 def evaluate_regression_phase(df, model, X, columns, phase):
     all_true, all_pred = [], []
@@ -38,50 +37,6 @@ def evaluate_regression_phase(df, model, X, columns, phase):
         all_pred.extend(y_pred)
 
     return stats_list, all_true, all_pred
-
-def plot_all_metrics(dates, maes, rmses, medaes):
-    plt.figure(figsize=(14, 6))
-
-    plt.subplot(1, 3, 1)
-    plt.plot(dates, maes, 'o-', label='MAE')
-    plt.title("MAE pagal etapą")
-    plt.xlabel("Data")
-    plt.ylabel("MAE")
-    plt.grid(True)
-
-    plt.subplot(1, 3, 2)
-    plt.plot(dates, rmses, 'o-', label='RMSE', color='orange')
-    plt.title("RMSE pagal etapą")
-    plt.xlabel("Data")
-    plt.ylabel("RMSE")
-    plt.grid(True)
-
-    plt.subplot(1, 3, 3)
-    plt.plot(dates, medaes, 'o-', label='MedAE', color='green')
-    plt.title("MedAE pagal etapą")
-    plt.xlabel("Data")
-    plt.ylabel("MedAE")
-    plt.grid(True)
-
-    plt.tight_layout()
-    plt.show()
-
-def show_error_percentiles(y_true, y_pred):
-    errors = np.abs(np.array(y_true) - np.array(y_pred))
-    percentiles = [50, 75, 90, 95]
-    print("\n📈 Klaidų paskirstymo percentiliai:")
-    for p in percentiles:
-        print(f"{p}%% klaida < {np.percentile(errors, p):.2f} vietų")
-
-    # Papildoma vizualizacija
-    plt.figure(figsize=(8, 5))
-    sns.histplot(errors, bins=30, kde=True, color="skyblue")
-    plt.title("Prognozės klaidų pasiskirstymas")
-    plt.xlabel("Absoliuti klaida (vietų skirtumas)")
-    plt.ylabel("Sportininkių skaičius")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
 
 def predict_place_rf(data_path, target_column, output_dir="data/"):
     df = pd.read_csv(data_path)
@@ -117,15 +72,21 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
     print("\n📋 Testavimo rezultatai:")
     test_stats, y_true_all, y_pred_all = evaluate_regression_phase(df, final_model, X_final, test_cols, "Test")
 
+    # Grafikai
     dates = [datetime.strptime(s['Etapas'].split()[0], "%Y-%m-%d") for s in test_stats]
-    plot_all_metrics(dates, [s["MAE"] for s in test_stats], [s["RMSE"] for s in test_stats], [s["MedAE"] for s in test_stats])
+    maes = [s['MAE'] for s in test_stats]
+    rmses = [s['RMSE'] for s in test_stats]
+    medaes = [s['MedAE'] for s in test_stats]
+
+    viz_dir = os.path.join("data", "visualizations")
+    prefix = "RandomForest"
+    save_place_metrics(dates, maes, rmses, medaes, viz_dir, prefix)
+    save_error_distribution(y_true_all, y_pred_all, viz_dir, prefix)
 
     print("\n📊 Bendri testavimo rezultatai visiems etapams:")
     print(f"Bendras MAE: {mean_absolute_error(y_true_all, y_pred_all):.3f}")
     print(f"Bendras RMSE: {mean_squared_error(y_true_all, y_pred_all) ** 0.5:.3f}")
     print(f"Bendras MedAE: {median_absolute_error(y_true_all, y_pred_all):.3f}")
-
-    show_error_percentiles(y_true_all, y_pred_all)
 
     os.makedirs(output_dir, exist_ok=True)
     event_type = "Sprint" if "Sprint" in target_column else \

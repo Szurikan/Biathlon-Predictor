@@ -190,3 +190,4 @@ data/Mano Duomenys/Etapu rezultatai.docx
 *.keras
 *.docx
 *.joblib
+*.png

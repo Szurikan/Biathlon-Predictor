@@ -15,7 +15,10 @@ from models.NNM.predict_place import predict_place_with_participation as lstm_pl
 # Keliai
 BINARY_CSV = "data/female_athletes_binary_competitions.csv"
 CLEANED_CSV = "data/female_athletes_cleaned_final.csv"
-EVENT_TYPES = ["Mass Start", "Individual", "Pursuit", "Sprint"]
+EVENT_TYPES = ["Mass Start"] 
+ #              "Individual", 
+  #             "Pursuit", 
+   #            "Sprint"]
 
 def train_all_events():
     df = pd.read_csv(BINARY_CSV)
