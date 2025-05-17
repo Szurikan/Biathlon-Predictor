@@ -7,9 +7,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import Sequential # type: ignore
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Input # type: ignore
+from tensorflow.keras.callbacks import EarlyStopping # type: ignore
+from tensorflow.keras.losses import MeanSquaredError # type: ignore
 
 def adjust_predictions_by_format(pred_scores, competition_name):
     if "Mass Start" in competition_name:
@@ -72,7 +73,7 @@ def predict_participation_lstm(data_path, target_column, output_dir="data/"):
         Dense(16, activation='relu'),
         Dense(1, activation='linear')
     ])
-    model.compile(optimizer='adam', loss='mse')
+    model.compile(optimizer='adam', loss=MeanSquaredError())
     model.fit(X_combined_train, y_train, epochs=50, batch_size=32, validation_split=0.2,
               callbacks=[EarlyStopping(patience=5, restore_best_weights=True)], verbose=0)
 

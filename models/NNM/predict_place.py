@@ -10,9 +10,10 @@ import tensorflow as tf
 from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, LSTM, Dense, Dropout, Concatenate
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import Model # type: ignore
+from tensorflow.keras.layers import Input, LSTM, Dense, Dropout, Concatenate # type: ignore
+from tensorflow.keras.callbacks import EarlyStopping # type: ignore
+from tensorflow.keras.losses import MeanSquaredError # type: ignore
 
 def show_error_percentiles(y_true, y_pred):
     errors = np.abs(np.array(y_true) - np.array(y_pred))
@@ -41,7 +42,7 @@ def build_model(units, dropout_rate, time_steps, static_dim):
     output = Dense(1)(dense)
 
     model = Model(inputs=[seq_input, static_input], outputs=output)
-    model.compile(optimizer='adam', loss='mse')
+    model.compile(optimizer='adam', loss=MeanSquaredError())
     return model
 
 def predict_place_lstm(data_path, target_column, output_dir="data/"):

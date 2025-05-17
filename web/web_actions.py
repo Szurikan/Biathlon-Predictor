@@ -7,6 +7,8 @@ from sklearn.ensemble import RandomForestRegressor
 from operations.data.loader import load_data
 from config.config import TOP_PREDICTIONS_COUNT
 import joblib
+from tensorflow.keras.models import load_model # type: ignore
+from tensorflow.keras.losses import MeanSquaredError # type: ignore
 
 # Paths
 DATA_FILE = os.path.join('data', 'female_athletes_cleaned_final.csv')
@@ -54,99 +56,114 @@ def load_existing_model(model_path):
 
 def predict_next_event(event_type, model_name):
     """
-    Prognozuoja ateities rezultatus pagal modelį ir etapo tipą.
-
-    :param event_type: "Sprint", "Pursuit", "Individual", arba "Mass Start"
-    :param model_name: "random_forest" | "xgboost" | "lstm"
-    :returns: list of dict su laukais rank, name, nation, predicted
+    Predicts the next event ranking using RF, XGBoost or LSTM.
+    Returns a list of dicts: {rank, name, nation, predicted}.
     """
     try:
         df = load_data(DATA_FILE)
 
-        # Convert percent strings to numeric
+        # Convert any “%” strings to floats
         for col in df.columns:
             if df[col].dtype == object:
                 s = df[col].dropna().astype(str)
                 if not s.empty and s.str.endswith('%').all():
                     df[col] = s.str.rstrip('%').astype(float)
 
-        # Identify nation one-hot columns
+        # One-hot nation columns
         nation_cols = [c for c in df.columns if c.startswith('Nation_')]
 
-        # Identify same-type historic events
-        event_cols = [c for c in df.columns if c.startswith('202') and event_type.lower() in c.lower()]
-        races = sorted(event_cols, key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
+        # All same-type past events
+        event_cols = [
+            c for c in df.columns
+            if c.startswith('202') and event_type.lower() in c.lower()
+        ]
+        races = sorted(
+            event_cols,
+            key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d")
+        )
+        if not races:
+            return []
 
+        # Map to file-friendly key
+        event_map = {
+            "Sprint": "Sprint",
+            "Pursuit": "Pursuit",
+            "Individual": "Individual",
+            "Mass Start": "MassStart"
+        }
+        event_key = event_map.get(event_type, "Unknown")
+
+        # ________ RANDOM FOREST ________
         if model_name == 'random_forest':
-            # Pasiruošiam duomenis
-            if len(races) < 1:
-                return []
-            event_map = {
-                "Sprint": "Sprint",
-                "Pursuit": "Pursuit",
-                "Individual": "Individual",
-                "Mass Start": "MassStart"
-            }
-            event_key = event_map.get(event_type, "Unknown")
             model_filename = f"{event_key}_RandomForest_Next.pkl"
-
             model_path = os.path.join("data", model_filename)
-
             model, columns = load_existing_model(model_path)
             if model is None:
-                print(f"❌ Modelio failas nerastas: {model_path}")
                 return []
-
-            # Paimti X_pred pagal įkeltus stulpelius
             X_pred = df[columns].fillna(0)
-
             preds = model.predict(X_pred)
-            df['predicted_time'] = preds
 
-            # Sort and pick top
-            df_sorted = df.sort_values('predicted_time')
-            top = df_sorted.head(TOP_PREDICTIONS_COUNT)
-
-            # Build results with nation detection
-            results = []
-            for idx, (_, row) in enumerate(top.iterrows()):
-                nation = None
-                for col in nation_cols:
-                    if row.get(col, 0) == 1:
-                        nation = col.split('_', 1)[1]
-                        break
-                results.append({
-                    'rank': idx + 1,
-                    'name': row['FullName'],
-                    'nation': nation,
-                    'predicted': f"{idx + 1} vieta"
-                })
-            return results
-
-        elif model_name in ('xgboost', 'lstm'):
-            # Simple stub: sort by last event time
-            if not races:
+        # ________ XGBOOST ________
+        elif model_name == 'xgboost':
+            model_filename = f"{event_key}_XGBoost_Next.pkl"
+            model_path = os.path.join("data", model_filename)
+            model, columns = load_existing_model(model_path)
+            if model is None:
                 return []
-            last_col = races[-1]
-            clean = df.dropna(subset=[last_col]).sort_values(last_col)
-            results = []
-            for idx, (_, row) in enumerate(clean.head(TOP_PREDICTIONS_COUNT).iterrows()):
-                nation = None
-                for col in nation_cols:
-                    if row.get(col, 0) == 1:
-                        nation = col.split('_', 1)[1]
-                        break
-                results.append({
-                    'rank': idx + 1,
-                    'name': row['FullName'],
-                    'nation': nation,
-                    'predicted': f"{idx + 1} vieta"
-                })
-            return results
+            X_pred = df[columns].fillna(0)
+            preds = model.predict(X_pred)
+
+ # —— LSTM ——
+        elif model_name == 'lstm':
+            fn = f"{event_key}_LSTM_Next.h5"
+            mpath = os.path.join("data", fn)
+            if not os.path.exists(mpath):
+                print(f"❌ LSTM modelio failas nerastas: {mpath}")
+                return []
+            # load without compiling (kad «mse» metric klaidos nebeliktų)
+            model = load_model(mpath, compile=False)
+
+            # Naudojame tik to paties tipa praeities etapus, treniravimo dalydamiesi—
+            # train_date atitinka LSTM treniravimo seka (83 laiko žingsniai)
+            train_date = "2024-12-22"
+            train_cols = [
+                c for c in races
+                if datetime.strptime(c.split()[0], "%Y-%m-%d")
+                   <= datetime.strptime(train_date, "%Y-%m-%d")
+            ]
+            static_feats = [
+                c for c in df.columns
+                if not c.startswith("202") and c not in ["IBUId", "FullName"]
+            ]
+
+            # Paruošiame seka į LSTM
+            X_seq = df[train_cols].fillna(0).to_numpy()
+            X_seq = X_seq.reshape((X_seq.shape[0], X_seq.shape[1], 1))
+            X_static = df[static_feats].fillna(0).to_numpy()
+
+            preds = model.predict([X_seq, X_static]).flatten()
 
         else:
-            # Unsupported model
             return []
+
+        # Attach predictions, sort, pick top N
+        df['predicted_time'] = preds
+        df_sorted = df.sort_values('predicted_time')
+        top = df_sorted.head(TOP_PREDICTIONS_COUNT)
+
+        results = []
+        for idx, (_, row) in enumerate(top.iterrows()):
+            nation = next(
+                (col.split('_', 1)[1] for col in nation_cols if row.get(col, 0) == 1),
+                None
+            )
+            results.append({
+                'rank': idx + 1,
+                'name': row['FullName'],
+                'nation': nation,
+                'predicted': f"{idx + 1} vieta"
+            })
+        return results
 
     except Exception as e:
         print(f"Klaida prognozuojant etapą: {e}")
