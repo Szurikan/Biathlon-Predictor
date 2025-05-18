@@ -56,23 +56,23 @@ def load_existing_model(model_path):
 
 def predict_next_event(event_type, model_name):
     """
-    Predicts the next event ranking using RF, XGBoost or LSTM.
-    Returns a list of dicts: {rank, name, nation, predicted}.
+    Predicts the next event ranking using RF, XGBoost or LSTM,
+    but only for athletes predicted to participate.
     """
     try:
         df = load_data(DATA_FILE)
 
-        # Convert any “%” strings to floats
+        # Konvertuojame „%“ į skaičius (jei reikia)
         for col in df.columns:
             if df[col].dtype == object:
                 s = df[col].dropna().astype(str)
                 if not s.empty and s.str.endswith('%').all():
                     df[col] = s.str.rstrip('%').astype(float)
 
-        # One-hot nation columns
+        # Viena karšta kodavimas šaliai
         nation_cols = [c for c in df.columns if c.startswith('Nation_')]
 
-        # All same-type past events
+        # Atsirenkame tinkamo tipo etapus
         event_cols = [
             c for c in df.columns
             if c.startswith('202') and event_type.lower() in c.lower()
@@ -84,7 +84,23 @@ def predict_next_event(event_type, model_name):
         if not races:
             return []
 
-        # Map to file-friendly key
+        # Dalyvavimo modelio kelias
+        part_model_path = os.path.join("data", "next_event_Participation_RandomForest.pkl")
+        if not os.path.exists(part_model_path):
+            print(f"❌ Dalyvavimo modelio failas nerastas: {part_model_path}")
+            return []
+
+        # Įkeliame dalyvavimo modelį
+        part_model, part_columns = joblib.load(part_model_path)
+        X_part = df[part_columns].fillna(0)
+        part_raw = part_model.predict(X_part)
+
+        # Konvertuojame prognozes į 0/1 (naudojame esamą logiką)
+        from models.RandomForest.predict_participation import adjust_predictions_by_format
+        binary_preds = adjust_predictions_by_format(part_raw, event_type)
+        df = df[binary_preds == 1]  # Paliekame tik tuos, kurie dalyvauja
+
+        # Paruošiame duomenis pagal pasirinkto modelio tipą
         event_map = {
             "Sprint": "Sprint",
             "Pursuit": "Pursuit",
@@ -113,18 +129,15 @@ def predict_next_event(event_type, model_name):
             X_pred = df[columns].fillna(0)
             preds = model.predict(X_pred)
 
- # —— LSTM ——
+        # ________ LSTM ________
         elif model_name == 'lstm':
             fn = f"{event_key}_LSTM_Next.h5"
             mpath = os.path.join("data", fn)
             if not os.path.exists(mpath):
                 print(f"❌ LSTM modelio failas nerastas: {mpath}")
                 return []
-            # load without compiling (kad «mse» metric klaidos nebeliktų)
             model = load_model(mpath, compile=False)
 
-            # Naudojame tik to paties tipa praeities etapus, treniravimo dalydamiesi—
-            # train_date atitinka LSTM treniravimo seka (83 laiko žingsniai)
             train_date = "2024-12-22"
             train_cols = [
                 c for c in races
@@ -135,21 +148,18 @@ def predict_next_event(event_type, model_name):
                 c for c in df.columns
                 if not c.startswith("202") and c not in ["IBUId", "FullName"]
             ]
-
-            # Paruošiame seka į LSTM
             X_seq = df[train_cols].fillna(0).to_numpy()
             X_seq = X_seq.reshape((X_seq.shape[0], X_seq.shape[1], 1))
             X_static = df[static_feats].fillna(0).to_numpy()
-
             preds = model.predict([X_seq, X_static]).flatten()
 
         else:
             return []
 
-        # Attach predictions, sort, pick top N
+        # Sudedame prognozes ir rūšiuojame
         df['predicted_time'] = preds
         df_sorted = df.sort_values('predicted_time')
-        top = df_sorted.head(TOP_PREDICTIONS_COUNT)
+        top = df_sorted.head(10)
 
         results = []
         for idx, (_, row) in enumerate(top.iterrows()):
