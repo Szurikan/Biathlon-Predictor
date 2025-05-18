@@ -9,8 +9,13 @@ from operations.data.preprocessing import (
     fill_missing_with_personal_average,
     save_to_database
 )
+from operations.data.updater import update_data
+from operations.predict_all_events import train_model
 
-def main():
+def run_update():
+    update_data(output_path="data/female_athletes_2425_full_stats_with_ranks.csv")
+
+def run_preprocessing():
     input_path = "data/female_athletes_2425_full_stats_with_ranks.csv"
     output_path = "data/female_athletes_cleaned_final.csv"
     binary_output = "data/female_athletes_binary_competitions.csv"
@@ -33,6 +38,65 @@ def main():
     df = fill_missing_with_personal_average(df)
     save_cleaned_data(df, output_path)
     save_to_database(df, df_binary, db_path)
+
+def run_training():
+    models = {
+        "1": "RandomForest",
+        "2": "XGBoost",
+        "3": "LSTM"
+    }
+    tasks = {
+        "1": "participation",
+        "2": "place",
+        "3": "both"
+    }
+
+    print("\n=== Pasirinkite modelį ===")
+    print("1. Random Forest")
+    print("2. XGBoost")
+    print("3. LSTM")
+    model_choice = input("Modelio numeris: ").strip()
+
+    print("\n=== Pasirinkite prognozės tipą ===")
+    print("1. Dalyvavimas (participation)")
+    print("2. Vieta (place)")
+    print("3. Abi dalys")
+    task_choice = input("Prognozės tipas: ").strip()
+
+    model_name = models.get(model_choice)
+    task_type = tasks.get(task_choice)
+
+    if model_name and task_type:
+        train_model(model_name, task_type)
+    else:
+        print("⚠️ Netinkamas pasirinkimas.")
+
+def main():
+    while True:
+        print("\n=== Pagrindinis meniu ===")
+        print("1. Atnaujinti duomenis iš IBU API")
+        print("2. Apdoroti (išvalyti) duomenis")
+        print("3. Treniruoti modelius")
+        print("4. Viskas iš eilės")
+        print("0. Išeiti")
+
+        choice = input("Pasirinkite veiksmą (0-4): ").strip()
+
+        if choice == "1":
+            run_update()
+        elif choice == "2":
+            run_preprocessing()
+        elif choice == "3":
+            run_training()
+        elif choice == "4":
+            run_update()
+            run_preprocessing()
+            run_training()
+        elif choice == "0":
+            print("✅ Baigta.")
+            break
+        else:
+            print("⚠️ Neteisingas pasirinkimas. Bandykite dar kartą.")
 
 if __name__ == "__main__":
     main()

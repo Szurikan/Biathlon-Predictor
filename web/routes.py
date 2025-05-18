@@ -5,6 +5,8 @@ from models.RandomForest.predict_participation import predict_participation
 from operations.data.loader import load_data
 import pandas as pd
 import os
+from operations.predict_all_events import train_model
+
 
 
 CLEANED_CSV = "data/female_athletes_cleaned_final.csv"
@@ -121,5 +123,27 @@ def predict_next():
         flash(f"Klaida prognozuojant: {e}", "error")
         return redirect(url_for('web.index'))
 
+@web_bp.route('/train_models', methods=['POST'])
+def train_models():
+    model = request.form.get("model")  # 'random_forest', 'xgboost', 'lstm'
+    part = request.form.get("task")    # 'participation', 'place', 'both'
+
+    model_map = {
+        "random_forest": "RandomForest",
+        "xgboost": "XGBoost",
+        "lstm": "LSTM"
+    }
+
+    if model not in model_map or part not in ["participation", "place", "both"]:
+        flash("Neteisingi pasirinkimai.", "error")
+        return redirect(url_for('web.index'))
+
+    try:
+        train_model(model_map[model], part)
+        flash("Modeliai sėkmingai apmokyti!", "success")
+    except Exception as e:
+        flash(f"Klaida treniruojant modelius: {str(e)}", "error")
+
+    return redirect(url_for("web.index"))
 
 

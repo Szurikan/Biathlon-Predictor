@@ -91,5 +91,39 @@ def train_all_events():
             output_dir="data"
         )
 
+def train_model(model_name, task_type):
+    conn = sqlite3.connect(BINARY_DB)
+    df = pd.read_sql_query("SELECT * FROM binary_data", conn)
+    conn.close()
+
+    competition_columns = [col for col in df.columns if col.startswith("202")]
+
+    for event_type in EVENT_TYPES:
+        matching_cols = [col for col in competition_columns if event_type in col]
+        if not matching_cols:
+            print(f"⚠️ Nerasta {event_type} etapų.")
+            continue
+
+        latest_col = sorted(matching_cols, key=lambda x: x.split()[0])[-1]
+        print(f"\n📌 Etapas: {latest_col} ({event_type})")
+
+        if model_name == "RandomForest":
+            if task_type in ["participation", "both"]:
+                rf_participation(BINARY_DB, latest_col, output_dir="data")
+            if task_type in ["place", "both"]:
+                rf_place(CLEANED_DB, latest_col, output_dir="data")
+
+        elif model_name == "XGBoost":
+            if task_type in ["participation", "both"]:
+                xgb_participation(BINARY_DB, latest_col, output_dir="data")
+            if task_type in ["place", "both"]:
+                xgb_place(CLEANED_DB, latest_col, output_dir="data")
+
+        elif model_name == "LSTM":
+            if task_type in ["participation", "both"]:
+                lstm_participation(BINARY_DB, latest_col, output_dir="data")
+            if task_type in ["place", "both"]:
+                lstm_place(CLEANED_DB, latest_col, output_dir="data")
+
 if __name__ == "__main__":
     train_all_events()
