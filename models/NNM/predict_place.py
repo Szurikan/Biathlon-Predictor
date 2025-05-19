@@ -4,9 +4,9 @@ import os
 from datetime import datetime
 from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error
 from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import Sequential # type: ignore
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Input # type: ignore
+from tensorflow.keras.callbacks import EarlyStopping # type: ignore
 from visualizations.visualizations import save_place_metrics, save_error_distribution
 import sqlite3
 
