@@ -12,7 +12,8 @@ from tensorflow.keras.models import load_model # type: ignore
 from tensorflow.keras.losses import MeanSquaredError # type: ignore
 
 # Paths
-DATA_FILE = os.path.join('data', 'female_athletes_cleaned_final.csv')
+DATA_FILE = "data/athletes_data.db"
+TABLE_NAME = "cleaned_data"
 
 # No persistence directory used: always train fresh
 

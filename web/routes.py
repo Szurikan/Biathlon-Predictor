@@ -9,9 +9,10 @@ from operations.predict_all_events import train_model
 
 
 
-CLEANED_CSV = "data/female_athletes_cleaned_final.csv"
-BINARY_CSV = "data/female_athletes_binary_competitions.csv"
+# CLEANED_CSV = "data/female_athletes_cleaned_final.csv"
+# BINARY_CSV = "data/female_athletes_binary_competitions.csv"
 DATA_FILE = os.path.join('data', 'female_athletes_2425_full_stats_with_ranks.csv')
+DB_FILE = "data/athletes_data.db"
 
 web_bp = Blueprint('web', __name__)
 
@@ -72,15 +73,13 @@ def predict():
     try:
         # 1. Paleidžiam dalyvavimo prognozę
         predict_participation(
-            data_path=BINARY_CSV,
+            data_path=DB_FILE,
             target_column=event,
             output_dir="data"
         )
 
-        # 2. Tada paleidžiam vietos prognozę
         predict_place_with_participation(
-            cleaned_data_path=CLEANED_CSV,
-            binary_data_path=BINARY_CSV,
+            data_path=DB_FILE,
             target_column=event,
             output_dir="models/RandomForest"
         )
