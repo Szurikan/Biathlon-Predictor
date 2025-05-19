@@ -121,7 +121,7 @@ def predict_participation_lstm(data_path, target_column, output_dir="data/"):
     print(f"FN: {cm_total[1][0]}, TP: {cm_total[1][1]}")
 
     model_path = os.path.join(output_dir, f"next_event_Participation_LSTM_Next.keras")
-    joblib.dump((final_model, None), model_path)
+    final_model.save(model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 
 if __name__ == "__main__":

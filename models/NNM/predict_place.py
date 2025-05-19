@@ -162,7 +162,7 @@ def predict_place_lstm(data_path, target_column, output_dir="data/"):
         print("\n⚠️ Nepavyko atlikti testavimo - nėra tinkamų testavimo duomenų.")
     
     
-    model_path = os.path.join(output_dir, f"next_event_place_LSTM.keras")
+    model_path = os.path.join(output_dir, f"next_event_Place_LSTM.keras")
     model.save(model_path)
     print(f"\nModelis išsaugotas: {model_path}")
 

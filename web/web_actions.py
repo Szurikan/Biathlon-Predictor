@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from datetime import datetime
@@ -131,27 +132,31 @@ def predict_next_event(event_type, model_name):
 
         # ________ LSTM ________
         elif model_name == 'lstm':
-            fn = f"{event_key}_LSTM_Next.h5"
+            fn = f"{event_key}_LSTM_Next.keras"
             mpath = os.path.join("data", fn)
             if not os.path.exists(mpath):
                 print(f"❌ LSTM modelio failas nerastas: {mpath}")
                 return []
             model = load_model(mpath, compile=False)
 
+            from sklearn.preprocessing import StandardScaler
+
+            static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
+            X_static = df[static_feats].fillna(0).values
+
             train_date = "2024-12-22"
-            train_cols = [
-                c for c in races
-                if datetime.strptime(c.split()[0], "%Y-%m-%d")
-                   <= datetime.strptime(train_date, "%Y-%m-%d")
-            ]
-            static_feats = [
-                c for c in df.columns
-                if not c.startswith("202") and c not in ["IBUId", "FullName"]
-            ]
-            X_seq = df[train_cols].fillna(0).to_numpy()
-            X_seq = X_seq.reshape((X_seq.shape[0], X_seq.shape[1], 1))
-            X_static = df[static_feats].fillna(0).to_numpy()
-            preds = model.predict([X_seq, X_static]).flatten()
+            train_cols = [c for c in races if datetime.strptime(c.split()[0], "%Y-%m-%d") <= datetime.strptime(train_date, "%Y-%m-%d")]
+            X_seq = df[train_cols].fillna(0).values
+
+            scaler_static = StandardScaler()
+            scaler_seq = StandardScaler()
+            X_static_norm = scaler_static.fit_transform(X_static)
+            X_seq_norm = scaler_seq.fit_transform(X_seq)
+        
+            # Sujungiame ir transformuojame į reikiamą formą 
+            X_combined = np.hstack((X_static_norm, X_seq_norm)).reshape((len(df), -1, 1))
+
+            preds = model.predict(X_combined).flatten()
 
         else:
             return []
