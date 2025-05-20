@@ -58,13 +58,15 @@ def predict_place_lstm(data_path, target_column, output_dir="data/"):
     
     # Supaprastinta LSTM modelio architektūra
     model = Sequential([
-        LSTM(32, input_shape=(seq_length, num_static + 1), return_sequences=False),
-        Dropout(0.2),
-        Dense(16, activation='relu'),
+        LSTM(64, input_shape=(seq_length, num_static + 1), return_sequences=True, activation='tanh'),
+        Dropout(0.5),
+        LSTM(80, return_sequences=False, activation='tanh'),
+        Dropout(0.5),
+        Dense(16, activation='tanh'),
         Dense(1)
     ])
     
-    model.compile(optimizer='adam', loss='mean_squared_error')
+    model.compile(optimizer='SGD', loss='mean_squared_error')
     
     # Early stopping, kad išvengtume persimokymo
     early_stopping = EarlyStopping(
