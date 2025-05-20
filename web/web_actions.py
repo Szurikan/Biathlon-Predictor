@@ -18,7 +18,6 @@ TABLE_NAME = "cleaned_data"
 # No persistence directory used: always train fresh
 
 def get_past_events():
-    """Gražina įvykusių etapų sąrašą chronologiškai."""
     try:
         df = load_data(DATA_FILE)
         race_cols = [col for col in df.columns if '(' in col and ')' in col]
@@ -29,7 +28,7 @@ def get_past_events():
 
 
 def _train_rf(event_type, df, races, static_feats):
-    """Train RF on pairs of historic same-type event results and return the model."""
+
     X_list, y_list = [], []
     for i in range(len(races) - 1):
         prev_col, next_col = races[i], races[i+1]
@@ -57,21 +56,16 @@ def load_existing_model(model_path):
 
 
 def predict_next_event(event_type, model_name):
-    """
-    Predicts the next event ranking using RF, XGBoost or LSTM,
-    but only for athletes predicted to participate.
-    """
+
     try:
         df = load_data(DATA_FILE)
 
-        # Konvertuojame „%“ į skaičius (jei reikia)
         for col in df.columns:
             if df[col].dtype == object:
                 s = df[col].dropna().astype(str)
                 if not s.empty and s.str.endswith('%').all():
                     df[col] = s.str.rstrip('%').astype(float)
 
-        # Viena karšta kodavimas šaliai
         nation_cols = [c for c in df.columns if c.startswith('Nation_')]
 
         # Atsirenkame tinkamo tipo etapus
@@ -154,7 +148,7 @@ def predict_next_event(event_type, model_name):
             X_static_norm = scaler_static.fit_transform(X_static)
             X_seq_norm = scaler_seq.fit_transform(X_seq)
         
-            # Sujungiame ir transformuojame į reikiamą formą 
+
             X_combined = np.hstack((X_static_norm, X_seq_norm)).reshape((len(df), -1, 1))
 
             preds = model.predict(X_combined).flatten()
@@ -162,7 +156,7 @@ def predict_next_event(event_type, model_name):
         else:
             return []
 
-        # Sudedame prognozes ir rūšiuojame
+
         df['predicted_time'] = preds
         df_sorted = df.sort_values('predicted_time')
         top = df_sorted.head(10)
