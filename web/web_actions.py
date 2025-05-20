@@ -4,7 +4,7 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
-# Remove caching/persistence to ensure fresh training
+from sklearn.preprocessing import StandardScaler
 from operations.data.loader import load_data
 from config.config import TOP_PREDICTIONS_COUNT
 import joblib
@@ -26,7 +26,6 @@ def get_past_events():
     except Exception as e:
         print(f"Klaida gaunant praėjusius etapus: {e}")
         return []
-
 
 def _train_rf(event_type, df, races, static_feats):
     """Train RF on pairs of historic same-type event results and return the model."""
@@ -55,132 +54,107 @@ def load_existing_model(model_path):
         return model, columns
     return None, None
 
-
 def predict_next_event(event_type, model_name):
-    """
-    Predicts the next event ranking using RF, XGBoost or LSTM,
-    but only for athletes predicted to participate.
-    """
+    from models.RandomForest.predict_participation import adjust_predictions_by_format
     try:
         df = load_data(DATA_FILE)
 
-        # Konvertuojame „%“ į skaičius (jei reikia)
         for col in df.columns:
             if df[col].dtype == object:
                 s = df[col].dropna().astype(str)
                 if not s.empty and s.str.endswith('%').all():
                     df[col] = s.str.rstrip('%').astype(float)
 
-        # Viena karšta kodavimas šaliai
         nation_cols = [c for c in df.columns if c.startswith('Nation_')]
-
-        # Atsirenkame tinkamo tipo etapus
-        event_cols = [
-            c for c in df.columns
-            if c.startswith('202') and event_type.lower() in c.lower()
-        ]
-        races = sorted(
-            event_cols,
-            key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d")
-        )
+        event_cols = [c for c in df.columns if c.startswith("202") and event_type.lower() in c.lower()]
+        races = sorted(event_cols, key=lambda x: datetime.strptime(x.split()[0], "%Y-%m-%d"))
         if not races:
             return []
 
-        # Dalyvavimo modelio kelias
-        part_model_path = os.path.join("data", "next_event_Participation_RandomForest.pkl")
-        if not os.path.exists(part_model_path):
-            print(f"❌ Dalyvavimo modelio failas nerastas: {part_model_path}")
-            return []
-
-        # Įkeliame dalyvavimo modelį
-        part_model, part_columns = joblib.load(part_model_path)
-        X_part = df[part_columns].fillna(0)
-        part_raw = part_model.predict(X_part)
-
-        # Konvertuojame prognozes į 0/1 (naudojame esamą logiką)
-        from models.RandomForest.predict_participation import adjust_predictions_by_format
-        binary_preds = adjust_predictions_by_format(part_raw, event_type)
-        df = df[binary_preds == 1]  # Paliekame tik tuos, kurie dalyvauja
-
-        # Paruošiame duomenis pagal pasirinkto modelio tipą
-        event_map = {
-            "Sprint": "Sprint",
-            "Pursuit": "Pursuit",
-            "Individual": "Individual",
-            "Mass Start": "MassStart"
+        part_model_map = {
+            "random_forest": "next_event_Participation_RandomForest.pkl",
+            "xgboost": "next_event_Participation_XGBoost.pkl",
+            "lstm": "next_event_Participation_LSTM_Next.keras"
         }
-        event_key = event_map.get(event_type, "Unknown")
+        part_model_path = os.path.join("data", part_model_map[model_name])
 
-        # ________ RANDOM FOREST ________
-        if model_name == 'random_forest':
-            model_filename = f"{event_key}_RandomForest_Next.pkl"
-            model_path = os.path.join("data", model_filename)
-            model, columns = load_existing_model(model_path)
-            if model is None:
+        if model_name == "lstm":
+            if not os.path.exists(part_model_path):
+                print(f"❌ Dalyvavimo LSTM modelio failas nerastas: {part_model_path}")
                 return []
-            X_pred = df[columns].fillna(0)
-            preds = model.predict(X_pred)
-
-        # ________ XGBOOST ________
-        elif model_name == 'xgboost':
-            model_filename = f"{event_key}_XGBoost_Next.pkl"
-            model_path = os.path.join("data", model_filename)
-            model, columns = load_existing_model(model_path)
-            if model is None:
-                return []
-            X_pred = df[columns].fillna(0)
-            preds = model.predict(X_pred)
-
-        # ________ LSTM ________
-        elif model_name == 'lstm':
-            fn = f"{event_key}_LSTM_Next.keras"
-            mpath = os.path.join("data", fn)
-            if not os.path.exists(mpath):
-                print(f"❌ LSTM modelio failas nerastas: {mpath}")
-                return []
-            model = load_model(mpath, compile=False)
-
-            from sklearn.preprocessing import StandardScaler
-
+            model = load_model(part_model_path, compile=False)
             static_feats = [c for c in df.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
             X_static = df[static_feats].fillna(0).values
-
-            train_date = "2024-12-22"
-            train_cols = [c for c in races if datetime.strptime(c.split()[0], "%Y-%m-%d") <= datetime.strptime(train_date, "%Y-%m-%d")]
-            X_seq = df[train_cols].fillna(0).values
-
-            scaler_static = StandardScaler()
-            scaler_seq = StandardScaler()
-            X_static_norm = scaler_static.fit_transform(X_static)
-            X_seq_norm = scaler_seq.fit_transform(X_seq)
-        
-            # Sujungiame ir transformuojame į reikiamą formą 
-            X_combined = np.hstack((X_static_norm, X_seq_norm)).reshape((len(df), -1, 1))
-
-            preds = model.predict(X_combined).flatten()
-
+            X_seq = df[races].fillna(0).values
+            X_static = StandardScaler().fit_transform(X_static)
+            X_seq = StandardScaler().fit_transform(X_seq)
+            X_combined = np.hstack((X_static, X_seq)).reshape((len(df), -1, 1))
+            raw = model.predict(X_combined).flatten()
         else:
+            if not os.path.exists(part_model_path):
+                print(f"❌ Dalyvavimo modelio failas nerastas: {part_model_path}")
+                return []
+            part_model, part_columns = joblib.load(part_model_path)
+            X_part = df[part_columns].fillna(0)
+            raw = part_model.predict(X_part)
+
+        binary_mask = adjust_predictions_by_format(raw, event_type)
+        df_part = df[binary_mask == 1]
+
+        if df_part.empty:
+            print("⚠️ Nėra numatomų dalyvių.")
             return []
 
-        # Sudedame prognozes ir rūšiuojame
-        df['predicted_time'] = preds
-        df_sorted = df.sort_values('predicted_time')
-        top = df_sorted.head(10)
+        place_model_map = {
+            "random_forest": "next_event_Place_RandomForest.pkl",
+            "xgboost": "next_event_Place_XGBoost.pkl",
+            "lstm": "next_event_Place_LSTM.keras"
+        }
+        place_model_path = os.path.join("data", place_model_map[model_name])
+
+        if model_name == "lstm":
+            if not os.path.exists(place_model_path):
+                print(f"❌ Vietos LSTM modelis nerastas: {place_model_path}")
+                return []
+            model = load_model(place_model_path, compile=False)
+            static_feats = [c for c in df_part.columns if not c.startswith("202") and c not in ["IBUId", "FullName"]]
+            static_data = df_part[static_feats].fillna(0).values
+            static_scaled = StandardScaler().fit_transform(static_data)
+            seq_length = min(10, len(races))
+            seq_cols = races[-seq_length:]
+            seq_data = df_part[seq_cols].fillna(0).values
+            seq_scaled = StandardScaler().fit_transform(seq_data)
+            n_samples = len(df_part)
+            n_features = static_scaled.shape[1] + 1
+            X_combined = np.zeros((n_samples, seq_length, n_features))
+            for t in range(seq_length):
+                X_combined[:, t, :-1] = static_scaled
+                X_combined[:, t, -1] = seq_scaled[:, t]
+            preds = model.predict(X_combined).flatten()
+        else:
+            if not os.path.exists(place_model_path):
+                print(f"❌ Vietos modelis nerastas: {place_model_path}")
+                return []
+            model, columns = joblib.load(place_model_path)
+            X_place = df_part[columns].fillna(0)
+            preds = model.predict(X_place)
+
+        df_part = df_part.copy()
+        df_part['predicted_time'] = preds
+        df_sorted = df_part.sort_values('predicted_time').head(10)
 
         results = []
-        for idx, (_, row) in enumerate(top.iterrows()):
-            nation = next(
-                (col.split('_', 1)[1] for col in nation_cols if row.get(col, 0) == 1),
-                None
-            )
+        for idx, (_, row) in enumerate(df_sorted.iterrows(), 1):
+            nation = next((col.split('_', 1)[1] for col in nation_cols if row.get(col, 0) == 1), None)
             results.append({
-                'rank': idx + 1,
+                'rank': idx,
                 'name': row['FullName'],
                 'nation': nation,
-                'predicted': f"{idx + 1} vieta"
+                'predicted': f"{idx} vieta"
             })
+
         return results
 
     except Exception as e:
-        print(f"Klaida prognozuojant etapą: {e}")
+        print(f"❌ Klaida prognozuojant etapą: {e}")
         return []
