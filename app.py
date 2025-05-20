@@ -1,7 +1,7 @@
 from flask import Flask
 from web.routes import web_bp
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 app.secret_key = 'labai_slapta_reiksme'
 app.register_blueprint(web_bp)
 

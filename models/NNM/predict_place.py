@@ -23,20 +23,18 @@ def predict_place_lstm(data_path, target_column, output_dir="data/"):
     val_cols = [c for c in comp_cols if train_date < c.split()[0] <= val_date]
     test_cols = [c for c in comp_cols if c.split()[0] > val_date]
     
-    # Geresnė duomenų transformacija LSTM modeliui
     seq_length = min(10, len(train_cols))  # Naudojame paskutinius 10 arba visus turimus etapus
     
     # Statinių požymių normalizavimas
     scaler_static = StandardScaler()
     static_features = scaler_static.fit_transform(df[static_feats].fillna(0))
     
-    # SVARBUS PAKEITIMAS: Normalizuojame duomenis nenaudojant stulpelių pavadinimų
     # Tiesiog normalizuojame vertes, bet nepriskiriame jų konkretiems stulpeliams
     train_data_values = df[train_cols[-seq_length:]].fillna(0).values
     scaler_seq = StandardScaler()
     sequence_data = scaler_seq.fit_transform(train_data_values)
     
-    # Paruošiame įvesties duomenis (X) ir tikslinius duomenis (y)
+
     X_seq = np.zeros((len(df), seq_length, 1))
     for i in range(seq_length):
         if i < len(train_cols[-seq_length:]):
@@ -56,7 +54,7 @@ def predict_place_lstm(data_path, target_column, output_dir="data/"):
     y_train = y_train[mask_train].values
     X_train = X_combined[mask_train]
     
-    # Supaprastinta LSTM modelio architektūra
+
     model = Sequential([
         LSTM(64, input_shape=(seq_length, num_static + 1), return_sequences=True, activation='tanh'),
         Dropout(0.5),

@@ -14,6 +14,7 @@ from visualizations.visualizations import (
 )
 import sqlite3
 
+
 def adjust_predictions_by_format(pred_scores, competition_name):
     if "Mass Start" in competition_name:
         target_count = 30
