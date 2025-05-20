@@ -9,13 +9,7 @@ import os
 from datetime import datetime
 
 def update_data(output_path=None):
-    """
-    Atnaujina biatlono duomenis iš IBU API ir išsaugo į CSV failą.
-    
-    Args:
-        output_path (str, optional): Kelias, kur išsaugoti CSV failą. 
-                                    Jei nenurodytas, naudoja numatytąjį kelią.
-    """
+
     if output_path is None:
         # Nustatome numatytąjį išsaugojimo kelią projekto struktūroje
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
