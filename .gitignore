@@ -156,6 +156,7 @@ dmypy.json
 
 # pytype static type analyzer
 .pytype/
+*.json
 
 # Cython debug symbols
 cython_debug/
@@ -173,18 +174,9 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-data/female_athletes_2425_full_stats_with_ranks.csv
-data/raw/female_athletes_2425_full_stats_with_ranks.csv
-data/female_athletes_cleaned_final.csv
-cleaned_data.csv
-results/future_predictions.csv
-results/validation_results.csv
-data/female_athletes_binary_competitions.csv
+
 *.csv
 *.pkl
-data/Mano Duomenys/~$apu rezultatai.docx
-data/Mano Duomenys/Etapu rezultatai.docx
-data/Mano Duomenys/Etapu rezultatai.docx
 *.docx
 *.h5
 *.keras
@@ -192,3 +184,4 @@ data/Mano Duomenys/Etapu rezultatai.docx
 *.joblib
 *.png
 *.db
+*.v2
