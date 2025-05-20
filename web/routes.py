@@ -28,7 +28,7 @@ def show_results():
     event = request.form.get('event')
     try:
         # Naudojame load_data vietoj tiesioginio skaitymo, kad būtų nuoseklumas
-        df = load_data(DATA_FILE)
+        df = load_data(DB_FILE)
         
         # Tikriname, ar etapas egzistuoja
         if event not in df.columns:
@@ -36,13 +36,13 @@ def show_results():
             return redirect(url_for('web.index'))
             
         # Filtruojame tik tas sportininkes, kurios dalyvavo etape
-        results = df[['FullName', 'Nation', event]].dropna()
+        results = df[['FullName', event]].dropna()
         # Rūšiuojame pagal rezultatą (mažesnė vertė = geresnė vieta)
         results = results.sort_values(event)
         
         # Konvertuojam į sąrašą žodynų
         results_list = []
-        for _, row in results.head(10).iterrows():
+        for _, row in results.head(5).iterrows():
             rank_value = row[event]
             # Užtikriname, kad rangas yra sveikasis skaičius
             try:
@@ -52,7 +52,6 @@ def show_results():
                 
             results_list.append({
                 "name": row['FullName'],
-                "nation": row['Nation'],
                 "rank": rank
             })
         
