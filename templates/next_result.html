@@ -1,0 +1,35 @@
+<!-- templates/next_result.html -->
+<!DOCTYPE html>
+<html lang="lt">
+  <head>
+    <meta charset="UTF-8">
+    <title>Prognozė – {{ event_type }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <h1>Prognozė: {{ event_type }} – {{ model.replace('_', ' ')|title }}</h1>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Vardas</th>
+          <th>Šalis</th>
+          <th>Prognozė</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in results %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ item.name }}</td>
+            <td>{{ item.nation }}</td>
+            <td>{{ item.predicted }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p><a href="{{ url_for('web.index') }}">Atgal</a></p>
+  </body>
+</html>

@@ -1,54 +1,78 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="lt">
-<head>
+  <head>
     <meta charset="UTF-8">
     <title>Biatlono Prognozė</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
+  </head>
+  <body>
     <h1>Biatlono rezultatų prognozė</h1>
 
-    <!-- Flash pranešimai -->
     {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash {{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
     {% endwith %}
 
-    <!-- Blokas 1: Įvykusių rezultatų peržiūra -->
-    <h2>1. Įvykusių etapų rezultatai</h2>
-    <form method="post" action="/show_results">
-        <label for="event">Pasirinkite įvykusį etapą:</label><br>
-        <select name="event" required>
-            {% for event in past_events %}
-                <option value="{{ event }}">{{ event }}</option>
-            {% endfor %}
-        </select><br><br>
-        <input type="submit" value="Rodyti rezultatus">
+    <hr>
+
+    <!-- 1. Sekančio etapo prognozė -->
+    <h2>1. Sekančio etapo prognozė pagal tipą</h2>
+    <form method="post" action="{{ url_for('web.predict_next') }}">
+      <label for="model">Pasirinkite modelį:</label><br>
+      <select name="model" id="model" required>
+        <option value="random_forest">Random Forest</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="lstm">LSTM</option>
+      </select><br><br>
+
+      <label for="event_type">Pasirinkite etapo tipą:</label><br>
+      <select name="event_type" id="event_type" required>
+        <option value="Sprint">Sprint</option>
+        <option value="Pursuit">Pursuit</option>
+        <option value="Individual">Individual</option>
+        <option value="Mass Start">Mass Start</option>
+      </select><br><br>
+
+      <input type="submit" value="Prognozuoti">
     </form>
 
     <hr>
 
-    <!-- Blokas 2: Būsimo etapo prognozė -->
-    <h2>2. Būsimo etapo prognozė</h2>
-    <form method="post" action="/predict">
-        <label for="race_type">Pasirinkite rungties tipą:</label><br>
-        <select name="race_type" required>
-            <option value="Sprint">Sprint</option>
-            <option value="Pursuit">Pursuit</option>
-            <option value="Mass Start">Mass Start</option>
-            <option value="Individual">Individual</option>
-        </select><br><br>
-        <input type="submit" value="Prognozuoti">
+    <!-- 2. Praėjusių etapų rezultatų peržiūra -->
+    <h2>2. Peržiūrėti praėjusių etapų rezultatus</h2>
+    <form method="post" action="{{ url_for('web.show_results') }}">
+      <label for="event">Pasirinkite etapą:</label><br>
+      <select name="event" id="event" required>
+        {% for event in past_events %}
+          <option value="{{ event }}">{{ event }}</option>
+        {% endfor %}
+      </select><br><br>
+
+      <input type="submit" value="Rodyti rezultatus">
     </form>
 
     <hr>
 
-    <!-- Atnaujinti duomenis mygtukas -->
-    <form action="/update" method="get">
-        <button type="submit">Atnaujinti duomenis</button>
+    <!-- 3. Modelių treniravimas -->
+    <h2>3. Modelių treniravimas</h2>
+    <form method="post" action="{{ url_for('web.train_models') }}">
+      <label for="model">Pasirinkite modelį:</label><br>
+      <select name="model" id="model" required>
+        <option value="random_forest">Random Forest</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="lstm">LSTM</option>
+      </select><br><br>
+
+      <label for="task">Pasirinkite užduotį:</label><br>
+      <select name="task" id="task" required>
+        <option value="participation">Dalyvavimas (participation)</option>
+        <option value="place">Vieta (place)</option>
+        <option value="both">Abi dalys</option>
+      </select><br><br>
+
+      <input type="submit" value="Treniruoti pasirinktą modelį">
     </form>
-</body>
+  </body>
 </html>
