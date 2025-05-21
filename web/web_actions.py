@@ -4,7 +4,6 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
-# Remove caching/persistence to ensure fresh training
 from operations.data.loader import load_data
 from config.config import TOP_PREDICTIONS_COUNT
 import joblib
@@ -27,26 +26,26 @@ def get_past_events():
         return []
 
 
-def _train_rf(event_type, df, races, static_feats):
+# def _train_rf(event_type, df, races, static_feats):
 
-    X_list, y_list = [], []
-    for i in range(len(races) - 1):
-        prev_col, next_col = races[i], races[i+1]
-        X = df[static_feats + [prev_col]].fillna(0).rename(columns={prev_col: 'last_time'})
-        y = pd.to_numeric(df[next_col], errors='coerce')
-        mask = y.notna()
-        X_list.append(X[mask])
-        y_list.append(y[mask])
+#     X_list, y_list = [], []
+#     for i in range(len(races) - 1):
+#         prev_col, next_col = races[i], races[i+1]
+#         X = df[static_feats + [prev_col]].fillna(0).rename(columns={prev_col: 'last_time'})
+#         y = pd.to_numeric(df[next_col], errors='coerce')
+#         mask = y.notna()
+#         X_list.append(X[mask])
+#         y_list.append(y[mask])
 
-    if not X_list:
-        return None
+#     if not X_list:
+#         return None
 
-    X_train = pd.concat(X_list, ignore_index=True)
-    y_train = pd.concat(y_list, ignore_index=True)
+    # X_train = pd.concat(X_list, ignore_index=True)
+    # y_train = pd.concat(y_list, ignore_index=True)
 
-    rf = RandomForestRegressor(n_estimators=100, random_state=42)
-    rf.fit(X_train, y_train)
-    return rf
+    # rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    # rf.fit(X_train, y_train)
+    # return rf
 
 def load_existing_model(model_path):
     if os.path.exists(model_path):
