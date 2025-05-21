@@ -9,6 +9,7 @@ from config.config import TOP_PREDICTIONS_COUNT
 import joblib
 from tensorflow.keras.models import load_model # type: ignore
 from tensorflow.keras.losses import MeanSquaredError # type: ignore
+from models.RandomForest.predict_participation import adjust_predictions_by_format
 
 # Paths
 DATA_FILE = "data/athletes_data.db"
@@ -87,14 +88,14 @@ def predict_next_event(event_type, model_name):
         }
         part_model_path = os.path.join("data", part_map[model_name])
         if not os.path.exists(part_model_path):
-            print(f"❌ Dalyvavimo modelio failas nerastas: {part_model_path}")
+            print(f"Dalyvavimo modelio failas nerastas: {part_model_path}")
             return []
 
         part_model, part_cols = joblib.load(part_model_path)
         part_raw = part_model.predict(df[part_cols].fillna(0))
 
         # Konvertuojame į 0/1
-        from models.RandomForest.predict_participation import adjust_predictions_by_format
+
         mask = adjust_predictions_by_format(part_raw, event_type).astype(bool)
         df = df[mask]
         if df.empty:
@@ -134,7 +135,7 @@ def predict_next_event(event_type, model_name):
             fn = f"{event_key}_LSTM_Next.keras"
             mpath = os.path.join("data", fn)
             if not os.path.exists(mpath):
-                print(f"❌ LSTM modelio failas nerastas: {mpath}")
+                print(f"LSTM modelio failas nerastas: {mpath}")
                 return []
             model = load_model(mpath, compile=False)
 
