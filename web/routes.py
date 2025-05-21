@@ -27,7 +27,7 @@ def show_results():
     """Rodo pasirinkto etapo rezultatus."""
     event = request.form.get('event')
     try:
-        # Naudojame load_data vietoj tiesioginio skaitymo, kad būtų nuoseklumas
+        # Naudojame load_data 
         df = load_data(DB_FILE)
         
         # Tikriname, ar etapas egzistuoja
@@ -37,14 +37,14 @@ def show_results():
             
         # Filtruojame tik tas sportininkes, kurios dalyvavo etape
         results = df[['FullName', event]].dropna()
-        # Rūšiuojame pagal rezultatą (mažesnė vertė = geresnė vieta)
+        # Rusiuojame pagal rezultata
         results = results.sort_values(event)
         
-        # Konvertuojam į sąrašą žodynų
+        # konvertuojame i sarasa zodynu
         results_list = []
         for _, row in results.head(5).iterrows():
             rank_value = row[event]
-            # Užtikriname, kad rangas yra sveikasis skaičius
+            # darom kad butu sveikasis skaicius
             try:
                 rank = int(rank_value)
             except (ValueError, TypeError):
