@@ -79,21 +79,26 @@ def predict_next_event(event_type, model_name):
         if not races:
             return []
 
-        # Dalyvavimo modelio kelias
-        part_model_path = os.path.join("data", "next_event_Participation_RandomForest.pkl")
+        # 4. Dalyvavimo modelio kelio map
+        part_map = {
+            "random_forest": "next_event_Participation_RandomForest.pkl",
+            "xgboost":       "next_event_Participation_XGBoost.pkl",
+            "lstm":          "next_event_Participation_LSTM_Next.pkl"
+        }
+        part_model_path = os.path.join("data", part_map[model_name])
         if not os.path.exists(part_model_path):
             print(f"❌ Dalyvavimo modelio failas nerastas: {part_model_path}")
             return []
 
-        # Įkeliame dalyvavimo modelį
-        part_model, part_columns = joblib.load(part_model_path)
-        X_part = df[part_columns].fillna(0)
-        part_raw = part_model.predict(X_part)
+        part_model, part_cols = joblib.load(part_model_path)
+        part_raw = part_model.predict(df[part_cols].fillna(0))
 
-        # Konvertuojame prognozes į 0/1 (naudojame esamą logiką)
+        # Konvertuojame į 0/1
         from models.RandomForest.predict_participation import adjust_predictions_by_format
-        binary_preds = adjust_predictions_by_format(part_raw, event_type)
-        df = df[binary_preds == 1]  # Paliekame tik tuos, kurie dalyvauja
+        mask = adjust_predictions_by_format(part_raw, event_type).astype(bool)
+        df = df[mask]
+        if df.empty:
+            return []
 
         # Paruošiame duomenis pagal pasirinkto modelio tipą
         event_map = {
