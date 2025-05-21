@@ -1,6 +1,3 @@
-"""
-Modulis duomenų atnaujinimui iš oficialaus IBU API.
-"""
 
 import biathlonresults
 import pandas as pd
@@ -11,13 +8,13 @@ from datetime import datetime
 def update_data(output_path=None):
 
     if output_path is None:
-        # Nustatome numatytąjį išsaugojimo kelią projekto struktūroje
+        # issaugojimo kelias
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         output_path = os.path.join(base_dir, "data", "female_athletes_2425_full_stats_with_ranks.csv")
     
     print(f"[1] Pradedami rinkti duomenys iš IBU API...")
     
-    # Sezonų ID, kuriuos naudosime
+    # Sezonu ID
     season_ids = ["2122", "2223", "2324", "2425"]
     events = []
     
@@ -29,7 +26,7 @@ def update_data(output_path=None):
     race_columns = []
     race_participants = {}
 
-    # Etapų skaitiklis kiekvienam sezonui
+    # Etapu skaicius sezone
     season_stage_counters = {season: 1 for season in season_ids}
 
     print(f"[3] Apdorojami {len(events)} renginiai...")
@@ -50,7 +47,7 @@ def update_data(output_path=None):
                 if any(keyword in discipline_raw.lower() for keyword in ["relay", "team", "mixed"]):
                     continue  # praleidžiam komandines
 
-                # Nustatome lytį pagal aprašymą
+                # Nustatoma lytis
                 if "Women" in discipline_raw:
                     gender_suffix = "W"
                 elif "Men" in discipline_raw:
@@ -58,7 +55,7 @@ def update_data(output_path=None):
                 else:
                     gender_suffix = ""
 
-                # Išvalome pavadinimą
+                # Pavadinimo koregavimas
                 discipline = (
                     discipline_raw.replace("km", "")
                     .replace("Men", "")
@@ -67,7 +64,7 @@ def update_data(output_path=None):
                     .title()
                 )
 
-                # Gauti datą ir metus
+                # Gaunam data 
                 race_date = datetime.strptime(date_str[:10], "%Y-%m-%d")
                 year = race_date.year
 
@@ -138,7 +135,7 @@ def update_data(output_path=None):
     df = pd.DataFrame(female_athletes, columns=columns)
     df = df.sort_values("FullName")
     
-    # Sukuriame trūkstamus katalogus, jei jų nėra
+    # Katalogu kurimas po klaidos
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     print(f"[5] Išsaugome {len(df)} sportininkių duomenis į {output_path}...")
