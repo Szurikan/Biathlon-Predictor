@@ -83,8 +83,8 @@ def predict_participation(data_path, target_column, output_dir="data/"):
     grid.fit(X_train, y_train)
     best_model = grid.best_estimator_
 
-    print(f"\n✅ Geriausias modelis: {grid.best_params_} su MSE={-grid.best_score_:.4f}")
-    print("\n📊 Validacijos rezultatai:")
+    print(f"\nGeriausias modelis: {grid.best_params_} su MSE={-grid.best_score_:.4f}")
+    print("\nValidacijos rezultatai:")
     evaluate_phase(df, best_model, X_train, val_cols, "Val")
 
     X_final = df[static_feats + train_cols + val_cols].fillna(0)
@@ -92,7 +92,7 @@ def predict_participation(data_path, target_column, output_dir="data/"):
     final_model = XGBRegressor(**grid.best_params_, objective='reg:squarederror', random_state=42)
     final_model.fit(X_final, y_final)
 
-    print("\n📋 Testavimo rezultatai:")
+    print("\nTestavimo rezultatai:")
     y_true_all, y_pred_all, test_stats = evaluate_phase(df, final_model, X_final, test_cols, "Test")
 
     dates = [datetime.strptime(s['Etapas'].split()[0], "%Y-%m-%d") for s in test_stats]
@@ -103,7 +103,7 @@ def predict_participation(data_path, target_column, output_dir="data/"):
     cm_total = confusion_matrix(y_true_all, y_pred_all)
     save_confusion_matrix(cm_total, viz_dir, prefix)
 
-    print("\n📊 Bendri testavimo rezultatai visiems etapams:")
+    print("\nBendri testavimo rezultatai visiems etapams:")
     print(classification_report(y_true_all, y_pred_all, digits=2))
     print("\nBendra sujaukimo matrica:")
     print(f"TN: {cm_total[0][0]}, FP: {cm_total[0][1]}")

@@ -69,7 +69,7 @@ def run_training():
     if model_name and task_type:
         train_model(model_name, task_type)
     else:
-        print("⚠️ Netinkamas pasirinkimas.")
+        print("Netinkamas pasirinkimas.")
 
 def main():
     while True:
@@ -93,10 +93,10 @@ def main():
             run_preprocessing()
             run_training()
         elif choice == "0":
-            print("✅ Baigta.")
+            print("Baigta.")
             break
         else:
-            print("⚠️ Neteisingas pasirinkimas. Bandykite dar kartą.")
+            print("Neteisingas pasirinkimas. Bandykite dar kartą.")
 
 if __name__ == "__main__":
     main()

@@ -26,7 +26,7 @@ def evaluate_regression_phase(df, model, X, columns, phase):
         rmse = mean_squared_error(y_true, y_pred) ** 0.5
         medae = median_absolute_error(y_true, y_pred)
 
-        print(f"\n📊 {phase} etapas: {col}")
+        print(f"\n{phase} etapas: {col}")
         print(f"MAE: {mae:.2f}, RMSE: {rmse:.2f}, MedAE: {medae:.2f}")
 
         stats_list.append({
@@ -68,8 +68,8 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
     grid.fit(X_train, y_train)
     best_model = grid.best_estimator_
 
-    print(f"\n✅ Geriausias modelis: {grid.best_params_} su MSE={-grid.best_score_:.4f}")
-    print("\n📊 Validacijos rezultatai:")
+    print(f"\nGeriausias modelis: {grid.best_params_} su MSE={-grid.best_score_:.4f}")
+    print("\nValidacijos rezultatai:")
     evaluate_regression_phase(df, best_model, X_train, val_cols, "Val")
 
     X_final = df[static_feats + train_cols].fillna(0)
@@ -80,7 +80,7 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
     final_model = RandomForestRegressor(n_estimators=grid.best_params_['n_estimators'], random_state=42)
     final_model.fit(X_final, y_final)
 
-    print("\n📋 Testavimo rezultatai:")
+    print("\nTestavimo rezultatai:")
     test_stats, y_true_all, y_pred_all = evaluate_regression_phase(df, final_model, X_final, test_cols, "Test")
 
     # Grafikai
@@ -94,7 +94,7 @@ def predict_place_rf(data_path, target_column, output_dir="data/"):
     save_place_metrics(dates, maes, rmses, medaes, viz_dir, prefix)
     save_error_distribution(y_true_all, y_pred_all, viz_dir, prefix)
 
-    print("\n📊 Bendri testavimo rezultatai visiems etapams:")
+    print("\nBendri testavimo rezultatai visiems etapams:")
     print(f"Bendras MAE: {mean_absolute_error(y_true_all, y_pred_all):.3f}")
     print(f"Bendras RMSE: {mean_squared_error(y_true_all, y_pred_all) ** 0.5:.3f}")
     print(f"Bendras MedAE: {median_absolute_error(y_true_all, y_pred_all):.3f}")
