@@ -93,7 +93,7 @@ def predict_participation_lstm(data_path, target_column, output_dir="data/"):
     final_model.fit(X_final, y_final, epochs=50, batch_size=32, validation_split=0.1,
                     callbacks=[EarlyStopping(patience=5, restore_best_weights=True)], verbose=0)
 
-    print("\n📋 Testavimo rezultatai:")
+    print("\nTestavimo rezultatai:")
     all_y_true, all_y_pred, stats_list = [], [], []
     for col in test_cols[1:]:
         y = df[col].fillna(0).astype(int)
@@ -114,7 +114,7 @@ def predict_participation_lstm(data_path, target_column, output_dir="data/"):
     cm_total = confusion_matrix(all_y_true, all_y_pred)
     save_confusion_matrix(cm_total, viz_dir, prefix)
 
-    print("\n📊 Bendri testavimo rezultatai visiems etapams:")
+    print("\nBendri testavimo rezultatai visiems etapams:")
     print(classification_report(all_y_true, all_y_pred, digits=2))
     print("\nBendra sujaukimo matrica:")
     print(f"TN: {cm_total[0][0]}, FP: {cm_total[0][1]}")

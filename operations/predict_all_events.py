@@ -43,14 +43,14 @@ def train_all_events():
         # -------------------------
         # RANDOM FOREST
         # -------------------------
-        print("🌲 Random Forest:")
-        print("🔄 Dalyvavimo prognozė...")
+        print("Random Forest:")
+        print("Dalyvavimo prognozė...")
         rf_participation(
             data_path=BINARY_DB,
             target_column=latest_col,
             output_dir="data"
         )
-        print("🎯 Vietos prognozė...")
+        print("Vietos prognozė...")
         rf_place(
             data_path=CLEANED_DB,
             target_column=latest_col,
@@ -60,14 +60,14 @@ def train_all_events():
         # -------------------------
         # XGBOOST
         # -------------------------
-        print("⚡ XGBoost:")
-        print("🔄 Dalyvavimo prognozė...")
+        print("XGBoost:")
+        print("Dalyvavimo prognozė...")
         xgb_participation(
             data_path=BINARY_DB,
             target_column=latest_col,
             output_dir="data"
         )
-        print("🎯 Vietos prognozė...")
+        print("Vietos prognozė...")
         xgb_place(
             data_path=CLEANED_DB,
             target_column=latest_col,
@@ -77,14 +77,14 @@ def train_all_events():
         # -------------------------
         # LSTM
         # -------------------------
-        print("🧠 LSTM:")
-        print("🔄 Dalyvavimo prognozė...")
+        print("LSTM:")
+        print("Dalyvavimo prognozė...")
         lstm_participation(
             data_path=BINARY_DB,
             target_column=latest_col,
             output_dir="data"
         )
-        print("🎯 Vietos prognozė...")
+        print("Vietos prognozė...")
         lstm_place(
             data_path=CLEANED_DB,
             target_column=latest_col,

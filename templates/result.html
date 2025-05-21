@@ -1,8 +1,15 @@
+<!-- templates/next_result.html -->
+<!DOCTYPE html>
+<html lang="lt">
+  <head>
+    <meta charset="UTF-8">
+    <title>Prognozė – {{ event_type }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
 <table>
     <tr>
         <th>#</th>
         <th>Vardas</th>
-        <th>Šalis</th>
         {% if is_past %}
             <th>Vieta</th>
         {% else %}
@@ -14,7 +21,6 @@
         <tr>
             <td>{{ loop.index }}</td>
             <td>{{ item['name'] if item.get('name') else item['FullName'] }}</td>
-            <td>{{ item['nation'] if item.get('nation') else '' }}</td>
             {% if is_past %}
                 <td>{{ item['rank'] }}</td>
             {% else %}

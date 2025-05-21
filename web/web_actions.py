@@ -4,12 +4,12 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
-# Remove caching/persistence to ensure fresh training
 from operations.data.loader import load_data
 from config.config import TOP_PREDICTIONS_COUNT
 import joblib
 from tensorflow.keras.models import load_model # type: ignore
 from tensorflow.keras.losses import MeanSquaredError # type: ignore
+from models.RandomForest.predict_participation import adjust_predictions_by_format
 
 # Paths
 DATA_FILE = "data/athletes_data.db"
@@ -27,26 +27,26 @@ def get_past_events():
         return []
 
 
-def _train_rf(event_type, df, races, static_feats):
+# def _train_rf(event_type, df, races, static_feats):
 
-    X_list, y_list = [], []
-    for i in range(len(races) - 1):
-        prev_col, next_col = races[i], races[i+1]
-        X = df[static_feats + [prev_col]].fillna(0).rename(columns={prev_col: 'last_time'})
-        y = pd.to_numeric(df[next_col], errors='coerce')
-        mask = y.notna()
-        X_list.append(X[mask])
-        y_list.append(y[mask])
+#     X_list, y_list = [], []
+#     for i in range(len(races) - 1):
+#         prev_col, next_col = races[i], races[i+1]
+#         X = df[static_feats + [prev_col]].fillna(0).rename(columns={prev_col: 'last_time'})
+#         y = pd.to_numeric(df[next_col], errors='coerce')
+#         mask = y.notna()
+#         X_list.append(X[mask])
+#         y_list.append(y[mask])
 
-    if not X_list:
-        return None
+#     if not X_list:
+#         return None
 
-    X_train = pd.concat(X_list, ignore_index=True)
-    y_train = pd.concat(y_list, ignore_index=True)
+    # X_train = pd.concat(X_list, ignore_index=True)
+    # y_train = pd.concat(y_list, ignore_index=True)
 
-    rf = RandomForestRegressor(n_estimators=100, random_state=42)
-    rf.fit(X_train, y_train)
-    return rf
+    # rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    # rf.fit(X_train, y_train)
+    # return rf
 
 def load_existing_model(model_path):
     if os.path.exists(model_path):
@@ -80,21 +80,26 @@ def predict_next_event(event_type, model_name):
         if not races:
             return []
 
-        # Dalyvavimo modelio kelias
-        part_model_path = os.path.join("data", "next_event_Participation_RandomForest.pkl")
+        # 4. Dalyvavimo modelio kelio map
+        part_map = {
+            "random_forest": "next_event_Participation_RandomForest.pkl",
+            "xgboost":       "next_event_Participation_XGBoost.pkl",
+            "lstm":          "next_event_Participation_LSTM_Next.pkl"
+        }
+        part_model_path = os.path.join("data", part_map[model_name])
         if not os.path.exists(part_model_path):
-            print(f"❌ Dalyvavimo modelio failas nerastas: {part_model_path}")
+            print(f"Dalyvavimo modelio failas nerastas: {part_model_path}")
             return []
 
-        # Įkeliame dalyvavimo modelį
-        part_model, part_columns = joblib.load(part_model_path)
-        X_part = df[part_columns].fillna(0)
-        part_raw = part_model.predict(X_part)
+        part_model, part_cols = joblib.load(part_model_path)
+        part_raw = part_model.predict(df[part_cols].fillna(0))
 
-        # Konvertuojame prognozes į 0/1 (naudojame esamą logiką)
-        from models.RandomForest.predict_participation import adjust_predictions_by_format
-        binary_preds = adjust_predictions_by_format(part_raw, event_type)
-        df = df[binary_preds == 1]  # Paliekame tik tuos, kurie dalyvauja
+        # Konvertuojame į 0/1
+
+        mask = adjust_predictions_by_format(part_raw, event_type).astype(bool)
+        df = df[mask]
+        if df.empty:
+            return []
 
         # Paruošiame duomenis pagal pasirinkto modelio tipą
         event_map = {
@@ -130,7 +135,7 @@ def predict_next_event(event_type, model_name):
             fn = f"{event_key}_LSTM_Next.keras"
             mpath = os.path.join("data", fn)
             if not os.path.exists(mpath):
-                print(f"❌ LSTM modelio failas nerastas: {mpath}")
+                print(f"LSTM modelio failas nerastas: {mpath}")
                 return []
             model = load_model(mpath, compile=False)
 

@@ -9,16 +9,8 @@ def load_data(db_path, table_name="cleaned_data"):
     return df
 
 def clean_team_events(df):
-    """
-    Pašalina komandinių varžybų stulpelius.
-    
-    Args:
-        df (pandas.DataFrame): Pradiniai duomenys
-    
-    Returns:
-        pandas.DataFrame: Duomenys be komandinių varžybų stulpelių
-    """
-    print("[2] Šalinami visiškai tušti ir komandinių varžybų stulpeliai...")
+
+    print("[1] Šalinami visiškai tušti ir komandinių varžybų stulpeliai...")
     df = df.copy()
     df.dropna(axis=1, how='all', inplace=True)
     
@@ -29,16 +21,8 @@ def clean_team_events(df):
     return df
 
 def extract_identity_columns(df):
-    """
-    Išskiria identifikavimo stulpelius ir grąžina juos kartu su pagrindine duomenų lentele.
-    
-    Args:
-        df (pandas.DataFrame): Pradiniai duomenys
-    
-    Returns:
-        tuple: (df_bez_id, id_df) - duomenys be perteklinių ID stulpelių ir atskiras ID DataFrame
-    """
-    print("[3] Išsaugomi identifikaciniai stulpeliai...")
+
+    print("[2] Išsaugomi identifikaciniai stulpeliai...")
     df = df.copy()
     
     # Išsaugome vardus ir šalis
