@@ -101,16 +101,13 @@ def predict_next():
     model_name = request.form.get('model')
     event_type = request.form.get('event_type')
 
-    # (You can enforce support here if you like)
     if model_name not in ("random_forest", "xgboost", "lstm"):
         flash(f"Modelis '{model_name}' nepalaikomas.", "error")
         return redirect(url_for('web.index'))
 
     try:
-        # Call your stub (or real) predictor
         results = predict_next_event(event_type, model_name)
 
-        # Render a simple “next_result.html” table
         return render_template(
             'next_result.html',
             results=results,
